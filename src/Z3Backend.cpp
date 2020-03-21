@@ -1,7 +1,6 @@
 #include <cassert>
 #include <iostream>
 
-#include "z3.h"
 #include "z3++.h"
 
 #include "Z3Backend.h"
