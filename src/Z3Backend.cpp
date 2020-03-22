@@ -212,9 +212,11 @@ StandardDatalog::FormulaVector Z3Backend::query(const std::string &relation_name
     // obtain the actual relation
     z3::expr relation_constraint = fixedpoint->get_answer();
 
-    // two cases:
+    // three cases:
     // 1. a single assignment, in the form of conjunction of variables
     // 2. disjunction of multiple assignments
+    // 3. true in case of a nullary relation or a relation that contains everything
+    //    NOTE: cannot be false in this case since that's ruled out by unsat
 
     if (relation_constraint.is_and() || relation_constraint.is_eq()) {
         // (and (= (:var a) <c1>) ...)
@@ -230,6 +232,11 @@ StandardDatalog::FormulaVector Z3Backend::query(const std::string &relation_name
             StandardDatalog::Formula formula(relation_name, args);
             facts.push_back(formula);
         }
+    } else if (relation_constraint.is_true()) {
+        assert(relation.arity() == 0 && "full relation not supported");
+        StandardDatalog::TermVector args;
+        StandardDatalog::Formula formula(relation_name, args);
+        facts.push_back(formula);
     } else {
         std::cerr << "relation constraint in unexpected format: "
                   << relation_constraint

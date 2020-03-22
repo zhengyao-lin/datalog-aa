@@ -1,29 +1,28 @@
 /**
  * A macro-based DSL for writing datalog IR
  * 
+ * Note: no variables/sort/relation starting with _ is allowed
+ * 
  * example program:
     #include "DatalogDSL.h" // switch on the dsl
     StandardDatalog::Program program = BEGIN
-        SORT(vertex, 10);
-        REL(edge, vertex, vertex);
-        REL(path, vertex, vertex);
-        
-        HORN(
-            ATOM(path, string("x"), string("y")),
-            ATOM(edge, string("x"), string("y"))
-        );
+        sort(V, 65535);
 
-        HORN(
-            ATOM(path, string("x"), string("z")),
-            ATOM(path, string("x"), string("y")),
-            ATOM(path, string("y"), string("z"))
-        );
+        rel(vertex, V);
+        rel(edge, V, V);
+        rel(path, V, V);
+        var(x); var(y); var(z);
 
-        FACT(edge, 1, 2);
-        FACT(edge, 2, 3);
-        FACT(edge, 3, 4);
-        FACT(edge, 2, 5);
-        FACT(edge, 3, 6);
+        path(x, x) <<= vertex(x);
+        path(x, y) <<= edge(x, y);
+        path(x, z) <<= path(x, y) & path(y, z);
+
+        fact vertex(1);
+        fact vertex(2);
+        fact vertex(3);
+
+        fact edge(1, 2);
+        fact edge(2, 3);
     END;
     #include "DatalogDSL.h" // switch off the dsl
  */
@@ -33,11 +32,10 @@
 #ifndef _DATALOG_DSL_HELPER_
 #define _DATALOG_DSL_HELPER_
 
-// cannot declare functions in block scope...
-// so class it is ;)
 struct DatalogDSLEnvironment {
     StandardDatalog::Program program;
     bool is_next_fact = false;
+    unsigned int variable_counter = 0;
 
     template<typename = void>
     constexpr StandardDatalog::TermVector parseTermVector() {
@@ -56,6 +54,10 @@ struct DatalogDSLEnvironment {
         StandardDatalog::TermVector terms = parseTermVector<Rest...>(rest...);
         terms.insert(terms.begin(), StandardDatalog::Term(first));
         return terms;
+    }
+
+    std::string getFreshVariable() {
+        return "_" + std::to_string(variable_counter++);
     }
 };
 
@@ -110,6 +112,15 @@ struct DatalogDSLRelation {
     }
 };
 
+struct DatalogDSLWildcard {
+    DatalogDSLEnvironment *env;
+    DatalogDSLWildcard(DatalogDSLEnvironment &env): env(&env) {}
+
+    operator std::string() {
+        return env->getFreshVariable();
+    }
+};
+
 inline DatalogDSLHornBody &DatalogDSLHornBody::operator&(const DatalogDSLAtom &other) {
     append(other.atom);
     return *this;
@@ -141,24 +152,31 @@ inline void operator<<=(const DatalogDSLAtom &head, const DatalogDSLAtom &body) 
 
     #define BEGIN \
         ([] () -> StandardDatalog::Program { \
-            DatalogDSLEnvironment env;
+            DatalogDSLEnvironment _env; \
+            DatalogDSLWildcard _(_env);
+
+    #define VALID_NAME(name) assert(name[0] != '_' && "symbol cannot start with underscore")
 
     #define sort(name, size) \
+        VALID_NAME(#name); \
         std::string name = #name; \
-        env.program.addSort(StandardDatalog::Sort(#name, size))
+        _env.program.addSort(StandardDatalog::Sort(#name, size))
 
     #define rel(name, ...) \
+        VALID_NAME(#name); \
         auto name = ([&] () { \
             StandardDatalog::Relation relation(#name, { __VA_ARGS__ }); \
-            env.program.addRelation(relation); \
-            return DatalogDSLRelation(env, #name); \
+            _env.program.addRelation(relation); \
+            return DatalogDSLRelation(_env, #name); \
         })()
 
-    #define var(name) std::string name = #name
+    #define var(name) \
+        VALID_NAME(#name); \
+        std::string name = #name
 
-    #define fact env.is_next_fact = true;
+    #define fact _env.is_next_fact = true;
 
     #define END \
-            return env.program; \
+            return _env.program; \
         })()
 #endif

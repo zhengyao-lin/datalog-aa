@@ -10,7 +10,25 @@ using namespace std;
 #include "DatalogDSL.h"
 
 static StandardDatalog::Program program = BEGIN
-    #include "Specifications/Path.datalog"
+    // a simple program for path finding
+
+    sort(V, 65536);
+
+    rel(vertex, V);
+    rel(edge, V, V);
+    rel(path, V, V);
+    var(x); var(y); var(z);
+
+    path(x, x) <<= vertex(x);
+    path(x, y) <<= edge(x, y);
+    path(x, z) <<= path(x, y) & path(y, z);
+
+    fact vertex(1);
+    fact vertex(2);
+    fact vertex(3);
+
+    fact edge(1, 2);
+    fact edge(2, 3);
 END;
 
 #include "DatalogDSL.h" // toggle dsl off

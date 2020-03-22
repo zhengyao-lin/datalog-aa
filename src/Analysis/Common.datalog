@@ -1,0 +1,41 @@
+// TODO: some common constants
+
+#ifdef IN_DSL
+    sort(Object, 65535)
+    /**
+     * Examples of objects:
+     *   - a global
+     *   - a function (pointer)
+     *   - result of alloca
+     *   - the actual memory object of alloca
+     */
+
+    var(x); var(y);
+
+    // type predicate. e.g. global(1) <-> 1 is a global
+    rel(global, Object);
+    rel(function, Object);
+    rel(instr, Object);
+
+    rel(hasInstr, Object /* function object */, Object /* instruction object */);
+    rel(hasOperand, Object /* instruction object */, Object /* operand */)
+
+    // alloca(2) <-> 2 is an alloca instruction
+    rel(alloca, Object /* instruction object */);
+    instr(x) <<= alloca(x); // alloca is an instruction
+
+    rel(load, Object /* load result */, Object /* pointer object to load */);
+    instr(x) <<= load(x, _);
+    hasOperand(x, y) <<= load(x, y);
+
+    rel(store, Object, Object, Object);
+    instr(x) <<= store(x, _, _);
+    hasOperand(x, y) <<= store(x, y, _);
+    hasOperand(x, y) <<= store(x, _, y);
+
+    rel(unknown, Object);
+    // and various facts of hasOperand expected
+
+    rel(ret, Object);
+    instr(x) <<= ret(x);
+#endif

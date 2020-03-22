@@ -168,6 +168,9 @@ public:
 
 using StandardDatalog = Datalog<std::string, unsigned int>;
 
+/**
+ * Prints out the program in the bddbddb syntax
+ */
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Term &term);
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Formula &formula);
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Sort &sort);

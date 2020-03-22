@@ -52,6 +52,7 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Sort &sort) {
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &relation) {
     out << relation.getName() << "(";
     bool first = true;
+    unsigned int var_indx = 0;
 
     for (auto const &sort: relation.getArgumentSorts()) {
         if (first) {
@@ -60,10 +61,10 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &rel
             out << ", ";
         }
 
-        out << sort;
+        out << "V" << var_indx++ << ": " << sort;
     }
 
-    out << ")";
+    out << ") printtuples";
 
     return out;
 }
@@ -82,7 +83,7 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Program &prog
     out << std::endl;
 
     for (auto const &formula: program.getFormulas()) {
-        out << formula << std::endl;
+        out << formula << "." << std::endl;
     }
 
     return out;
