@@ -185,7 +185,7 @@ void Z3Backend::collectVariablesInTerm(std::map<std::string, z3::expr> &var_tabl
     }
 }
 
-StandardDatalog::FormulaVector Z3Backend::getFixpointOf(const std::string &relation_name) {
+StandardDatalog::FormulaVector Z3Backend::query(const std::string &relation_name) {
     assert(relation_table.find(relation_name) != relation_table.end() &&
            "relation does not exist");
 
@@ -216,15 +216,12 @@ StandardDatalog::FormulaVector Z3Backend::getFixpointOf(const std::string &relat
     // 1. a single assignment, in the form of conjunction of variables
     // 2. disjunction of multiple assignments
 
-    assert((relation_constraint.is_or() || relation_constraint.is_and()) &&
-           "unexpected resulting constraint");
-
-    if (relation_constraint.is_and()) {
+    if (relation_constraint.is_and() || relation_constraint.is_eq()) {
         // (and (= (:var a) <c1>) ...)
         StandardDatalog::TermVector args = parseAssignment(relation_constraint);
         StandardDatalog::Formula formula(relation_name, args);
         facts.push_back(formula);
-    } else {
+    } else if (relation_constraint.is_or()) {
         // (or (and (= (:var a) <c1>) (= (:var b) <c2>) ...) ...)
         unsigned int num_arg = relation_constraint.num_args();
 
@@ -233,37 +230,58 @@ StandardDatalog::FormulaVector Z3Backend::getFixpointOf(const std::string &relat
             StandardDatalog::Formula formula(relation_name, args);
             facts.push_back(formula);
         }
+    } else {
+        std::cerr << "relation constraint in unexpected format: "
+                  << relation_constraint
+                  << std::endl;
+        assert(0);
     }
 
     return facts;
 }
 
 StandardDatalog::TermVector Z3Backend::parseAssignment(z3::expr assignment_clause) {
-    assert(assignment_clause.is_and() &&
-           "not an and clause");
-
-    unsigned int num_arg = assignment_clause.num_args();
     StandardDatalog::TermVector args;
 
-    for (unsigned int i = 0; i < num_arg; i++) {
-        // expecting to be of the form (= (:var i) <constant>)
-        z3::expr assignment = assignment_clause.arg(i);
-        assert(assignment.is_eq() && assignment.num_args() == 2 &&
-                "unexpected assignment format");
+    if (assignment_clause.is_and()) {
+        unsigned int num_arg = assignment_clause.num_args();
 
-        z3::expr lhs = assignment.arg(0);
-        z3::expr rhs = assignment.arg(1);
-    
+        for (unsigned int i = 0; i < num_arg; i++) {
+            // expecting to be of the form (= (:var i) <constant>)
+            z3::expr assignment = assignment_clause.arg(i);
+            assert(assignment.is_eq() && assignment.num_args() == 2 &&
+                    "unexpected assignment format");
+
+            z3::expr lhs = assignment.arg(0);
+            z3::expr rhs = assignment.arg(1);
+        
+            assert(lhs.is_var() && "lhs is not a variable");
+            assert(rhs.is_bv() && "rhs is not a bit vector");
+            
+            unsigned int constant = rhs.get_numeral_uint();
+
+            // TODO: this loop is relying on the order of
+            // equalities in the conjunction, which may
+            // not be reliable
+
+            args.push_back(constant);
+        }
+    } else if (assignment_clause.is_eq()) {
+        // a single equality constraint
+        z3::expr lhs = assignment_clause.arg(0);
+        z3::expr rhs = assignment_clause.arg(1);
+
         assert(lhs.is_var() && "lhs is not a variable");
         assert(rhs.is_bv() && "rhs is not a bit vector");
-        
+
         unsigned int constant = rhs.get_numeral_uint();
 
-        // TODO: this loop is relying on the order of
-        // equalities in the conjunction, which may
-        // not be reliable
-
         args.push_back(constant);
+    } else {
+        std::cerr << "unexpected assignment: "
+                  << assignment_clause
+                  << std::endl;
+        assert(0);
     }
 
     return args;

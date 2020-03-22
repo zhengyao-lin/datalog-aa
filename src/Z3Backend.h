@@ -18,7 +18,7 @@ class Z3Backend: public StandardDatalog::Engine {
 
 public:
     virtual void load(const StandardDatalog::Program &program) override;
-    virtual std::vector<StandardDatalog::Formula> getFixpointOf(const std::string &relation_name) override;
+    virtual std::vector<StandardDatalog::Formula> query(const std::string &relation_name) override;
 
 private:
     static unsigned int log2(unsigned int x);

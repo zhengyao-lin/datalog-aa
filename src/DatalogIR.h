@@ -162,7 +162,7 @@ public:
     class Engine {
     public:
         virtual void load(const Program &program) = 0;
-        virtual FormulaVector getFixpointOf(const S &relation_name) = 0;
+        virtual FormulaVector query(const S &relation_name) = 0;
     };
 };
 
@@ -173,70 +173,3 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Formula &form
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Sort &sort);
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &relation);
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Program &program);
-
-/**
- * A macro-based DSL for writing datalog IR
- * 
- * example program:
-    StandardDatalog::Program program = DATALOG_BEGIN
-        DATALOG_SORT(vertex, 10);
-        DATALOG_REL(edge, vertex, vertex);
-        DATALOG_REL(path, vertex, vertex);
-        
-        DATALOG_HORN(
-            DATALOG_ATOM(path, string("x"), string("y")),
-            DATALOG_ATOM(edge, string("x"), string("y"))
-        );
-
-        DATALOG_HORN(
-            DATALOG_ATOM(path, string("x"), string("z")),
-            DATALOG_ATOM(path, string("x"), string("y")),
-            DATALOG_ATOM(path, string("y"), string("z"))
-        );
-
-        DATALOG_FACT(edge, 1, 2);
-        DATALOG_FACT(edge, 2, 3);
-        DATALOG_FACT(edge, 3, 4);
-        DATALOG_FACT(edge, 2, 5);
-        DATALOG_FACT(edge, 3, 6);
-    DATALOG_END;
- */
-
-#define DATALOG_BEGIN \
-    ([] () -> StandardDatalog::Program { \
-        StandardDatalog::Program program;
-
-#define DATALOG_SORT(name, size) \
-    StandardDatalog::Sort name(#name, size); \
-    program.addSort(name)
-
-// TODO: unroll the loop
-#define DATALOG_REL(name, ...) \
-    program.addRelation(([&] () -> StandardDatalog::Relation { \
-        std::vector<std::string> sort_names; \
-        std::vector<StandardDatalog::Sort> sorts = { __VA_ARGS__ }; \
-        for (auto const &sort: sorts) { \
-            sort_names.push_back(sort.getName()); \
-        } \
-        return StandardDatalog::Relation(#name, sort_names); \
-    })())
-
-#define DATALOG_ATOM(relation, ...) \
-    (([] () -> StandardDatalog::Formula { \
-        StandardDatalog::Term args[] = { __VA_ARGS__ }; \
-        return StandardDatalog::Formula( \
-            #relation, \
-            StandardDatalog::TermVector(args, args + sizeof(args) / sizeof(*args))); \
-    })())
-
-#define DATALOG_HORN(atom, ...) \
-    program.addFormula(([] () -> StandardDatalog::Formula { \
-        StandardDatalog::FormulaVector body = { __VA_ARGS__ }; \
-        return StandardDatalog::Formula(atom, body); \
-    })())
-
-#define DATALOG_FACT(relation, ...) program.addFormula(DATALOG_ATOM(relation, __VA_ARGS__))
-
-#define DATALOG_END \
-        return program; \
-    })()

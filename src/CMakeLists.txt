@@ -3,6 +3,7 @@ find_package(Z3 REQUIRED CONFIG)
 file(GLOB src "*.cpp")
 
 set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_STANDARD 14)
 
 add_library(DatalogAA MODULE ${src})
 
