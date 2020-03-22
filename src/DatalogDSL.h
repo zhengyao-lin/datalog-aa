@@ -37,24 +37,8 @@ struct DatalogDSLEnvironment {
     bool is_next_fact = false;
     unsigned int variable_counter = 0;
 
-    template<typename = void>
-    constexpr StandardDatalog::TermVector parseTermVector() {
-        return StandardDatalog::TermVector();
-    }
-
-    template<typename = std::string, typename ...Rest>
-    constexpr StandardDatalog::TermVector parseTermVector(std::string first, Rest ...rest) {
-        StandardDatalog::TermVector terms = parseTermVector<Rest...>(rest...);
-        terms.insert(terms.begin(), StandardDatalog::Term(first));
-        return terms;
-    }
-
-    template<typename = unsigned int, typename ...Rest>
-    constexpr StandardDatalog::TermVector parseTermVector(unsigned int first, Rest ...rest) {
-        StandardDatalog::TermVector terms = parseTermVector<Rest...>(rest...);
-        terms.insert(terms.begin(), StandardDatalog::Term(first));
-        return terms;
-    }
+    DatalogDSLEnvironment() {}
+    DatalogDSLEnvironment(const StandardDatalog::Program &program): program(program) {}
 
     std::string getFreshVariable() {
         return "_" + std::to_string(variable_counter++);
@@ -99,8 +83,7 @@ struct DatalogDSLRelation {
 
     template<typename ...Ts>
     inline DatalogDSLAtom operator()(Ts ...args) const {
-        StandardDatalog::TermVector terms = env->parseTermVector<Ts...>(args...);
-        // push the term into the current environment
+        StandardDatalog::TermVector terms = StandardDatalog::parseTermVector<Ts...>(args...);
         StandardDatalog::Formula atom(name, terms);
 
         if (env->is_next_fact) {
@@ -151,7 +134,7 @@ inline void operator<<=(const DatalogDSLAtom &head, const DatalogDSLAtom &body) 
     #define IN_DSL
 
     #define BEGIN \
-        ([] () -> StandardDatalog::Program { \
+        (([] () -> StandardDatalog::Program { \
             DatalogDSLEnvironment _env; \
             DatalogDSLWildcard _(_env);
 
@@ -178,5 +161,5 @@ inline void operator<<=(const DatalogDSLAtom &head, const DatalogDSLAtom &body) 
 
     #define END \
             return _env.program; \
-        })()
+        })())
 #endif

@@ -27,12 +27,17 @@
  * program := (formula .)+
  */
 
+/**
+ * Require that S and C are different
+ */
 template<typename S /* symbol type */, typename C /* constant type */>
 class Datalog {
 public:
+    class Sort;
     class Term;
     class Formula;
 
+    using SymbolVector = std::vector<S>;
     using TermVector = std::vector<Term>;
     using FormulaVector = std::vector<Formula>;
 
@@ -58,27 +63,32 @@ public:
      * a horn clause of atomic propositions
      */
     class Formula {
-        S symbol; // relation symbol
+        S relation_name; // relation symbol
         TermVector args;
         FormulaVector body;
 
     public:
-        Formula(const S &symbol, const TermVector &args):
-            symbol(symbol), args(args) {}
+        Formula(const S &relation_name, const TermVector &args):
+            relation_name(relation_name), args(args) {}
 
         Formula(const Formula &head, const FormulaVector &body):
-            symbol(head.getName()), args(head.getArguments()), body(body) {
+            relation_name(head.getRelationName()), args(head.getArguments()), body(body) {
             assert(head.isAtom() && "cannot use a horn clause as head");
         }
 
-        Formula(const S &symbol, const TermVector &args, const FormulaVector &body):
-            symbol(symbol), args(args), body(body) {
+        Formula(const S &relation_name, const TermVector &args, const FormulaVector &body):
+            relation_name(relation_name), args(args), body(body) {
             for (auto const &sub_term: body) {
                 assert(sub_term.isAtom() && "subterm of a horn clause but be an atom");
             }
         }
 
-        const S &getName() const { return symbol; }
+        // e.g. Formula("relation_name", 1, 2, "this_is_a_variable")
+        template<typename ...Ts>
+        Formula(const S &relation_name, Ts ...args):
+            relation_name(relation_name), args(parseTermVector<Ts...>(args...)) {}
+
+        const S &getRelationName() const { return relation_name; }
         unsigned int getArity() const { return args.size(); }
 
         const Term &getArgument(unsigned int i) const {
@@ -87,6 +97,18 @@ public:
         }
 
         bool isAtom() const { return body.empty(); }
+
+        /**
+         * A reversed implication, e.g.
+         * Formula("rel1", 2, 4).given(
+         *     Formula("rel2", 2, 3),
+         *     Formula("rel2", 3, 4)
+         * )
+         */
+        template<typename ...Ts>
+        Formula given(Ts ...args) {
+            return Formula(*this, parseFormulaVector<Ts...>(args...));
+        }
 
         const TermVector &getArguments() const { return args; }
         const FormulaVector &getBody() const { return body; }
@@ -108,11 +130,17 @@ public:
 
     class Relation {
         S name;
-        std::vector<S> sorts;
+        SymbolVector sort_names;
 
     public:
-        Relation(const S &name, const std::vector<S> &sorts):
-            name(name), sorts(sorts) {}
+        Relation(const S &name, const SymbolVector &sort_names):
+            name(name), sort_names(sort_names) {}
+
+        Relation(const S &name): name(name) {}
+
+        template<typename ...Ts>
+        Relation(const S &name, Ts ...args):
+            name(name), sort_names(parseSymbolVector<Ts...>(args...)) {}
 
         Formula getAtom(const TermVector &terms) const {
             return new Formula(name, terms);
@@ -120,12 +148,21 @@ public:
 
         const S &getName() const { return name; }
 
-        const S &getArgumentSort(unsigned int idx) const {
-            assert(idx < sorts.size() && "index out of range");
-            return sorts.at(idx);
+        const S &getArgumentSortName(unsigned int idx) const {
+            assert(idx < sort_names.size() && "index out of range");
+            return sort_names.at(idx);
         }
 
-        const std::vector<S> &getArgumentSorts() const { return sorts; }
+        const SymbolVector &getArgumentSortNames() const { return sort_names; }
+
+        template<typename ...Ts>
+        Formula operator()(Ts ...args) const {
+            TermVector terms = parseTermVector<Ts...>(args...);
+            assert(terms.size() == sort_names.size() &&
+                   "number of terms does not match the number of sorts");
+
+            return Formula(name, terms);
+        }
     };
 
     class Program {
@@ -135,23 +172,35 @@ public:
 
     public:
         void addSort(const Sort &sort) {
-            assert(sorts.find(sort.getName()) == sorts.end() && "duplicated sort");
+            assert(!hasSort(sort.getName()) && "duplicated sort");
             sorts.insert(std::make_pair(sort.getName(), sort));
         }
 
         void addRelation(const Relation &relation) {
-            assert(relations.find(relation.getName()) == relations.end() && "duplicated relation");
+            assert(!hasRelation(relation.getName()) && "duplicated relation");
             relations.insert(std::make_pair(relation.getName(), relation));
         }
 
-        void addFormula(const Formula &formula) { formulas.push_back(formula); }
+        void addFormula(const Formula &formula) {
+            assert(hasRelation(formula.getRelationName()) &&
+                   "formula added before the relation has been declared");
+            formulas.push_back(formula);
+        }
 
         const std::map<S, Sort> &getSorts() const { return sorts; }
         const std::map<S, Relation> &getRelations() const { return relations; }
         const FormulaVector &getFormulas() const { return formulas; }
 
+        bool hasSort(const S &name) const {
+            return sorts.find(name) != sorts.end();
+        }
+
+        bool hasRelation(const S &name) const {
+            return relations.find(name) != relations.end();
+        }
+
         const Relation &getRelation(const S &name) const {
-            assert(relations.find(name) != relations.end() && "relation does not exist");
+            assert(hasRelation(name) && "relation does not exist");
             return relations.at(name);
         }
 
@@ -164,6 +213,70 @@ public:
         virtual void load(const Program &program) = 0;
         virtual FormulaVector query(const S &relation_name) = 0;
     };
+
+    /**
+     * Utility functions for parsing variadic arugments of sorts, terms, and formulas
+     */
+
+    template<typename = void>
+    static constexpr SymbolVector parseSymbolVector() {
+        return SymbolVector();
+    }
+
+    template<typename = S, typename ...Rest>
+    static constexpr SymbolVector parseSymbolVector(S first, Rest ...rest) {
+        SymbolVector symbols = parseSymbolVector<Rest...>(rest...);
+        symbols.insert(symbols.begin(), first);
+        return symbols;
+    }
+
+    /**
+     * Also supports passing a sort as a symbol
+     */
+    template<typename = Sort, typename ...Rest>
+    static constexpr SymbolVector parseSymbolVector(Sort first, Rest ...rest) {
+        SymbolVector symbols = parseSymbolVector<Rest...>(rest...);
+        symbols.insert(symbols.begin(), first.getName());
+        return symbols;
+    }
+
+    template<typename = void>
+    static constexpr TermVector parseTermVector() {
+        return TermVector();
+    }
+
+    template<typename = S, typename ...Rest>
+    static constexpr TermVector parseTermVector(S first, Rest ...rest) {
+        TermVector terms = parseTermVector<Rest...>(rest...);
+        terms.insert(terms.begin(), Term(first));
+        return terms;
+    }
+
+    template<typename = C, typename ...Rest>
+    static constexpr TermVector parseTermVector(C first, Rest ...rest) {
+        TermVector terms = parseTermVector<Rest...>(rest...);
+        terms.insert(terms.begin(), Term(first));
+        return terms;
+    }
+
+    template<typename = Term, typename ...Rest>
+    static constexpr TermVector parseTermVector(Term first, Rest ...rest) {
+        TermVector terms = parseTermVector<Rest...>(rest...);
+        terms.insert(terms.begin(), first);
+        return terms;
+    }
+
+    template<typename = void>
+    static constexpr FormulaVector parseFormulaVector() {
+        return FormulaVector();
+    }
+
+    template<typename = Formula, typename ...Rest>
+    static constexpr FormulaVector parseFormulaVector(Formula first, Rest ...rest) {
+        FormulaVector formulas = parseFormulaVector<Rest...>(rest...);
+        formulas.insert(formulas.begin(), first);
+        return formulas;
+    }
 };
 
 using StandardDatalog = Datalog<std::string, unsigned int>;

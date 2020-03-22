@@ -11,7 +11,7 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Term &term) {
 }
 
 std::ostream &operator<<(std::ostream &out, const StandardDatalog::Formula &formula) {
-    out << formula.getName() << "("; 
+    out << formula.getRelationName() << "("; 
     bool first = true;
 
     for (auto const &arg: formula.getArguments()) {
@@ -54,7 +54,7 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &rel
     bool first = true;
     unsigned int var_indx = 0;
 
-    for (auto const &sort: relation.getArgumentSorts()) {
+    for (auto const &sort: relation.getArgumentSortNames()) {
         if (first) {
             first = false;
         } else {

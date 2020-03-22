@@ -1,41 +1,80 @@
-// TODO: some common constants
+#ifndef IN_DSL
+
+#ifndef _COMMON_DATALOG_
+#define _COMMON_DATALOG_
+
+enum {
+    // ANY_OBJECT can contain
+    // pointers to ANY memory location
+    ANY_OBJECT = 0,
+    NUM_SPECIAL_OBJECTS
+};
+
+#endif // #ifndef _COMMON_DATALOG_
+
+#endif // #ifndef IN_DSL
 
 #ifdef IN_DSL
-    sort(Object, 65535)
+
+    sort(Object, 65535);
+
     /**
      * Examples of objects:
      *   - a global
      *   - a function (pointer)
-     *   - result of alloca
-     *   - the actual memory object of alloca
+     *   - result of instrAlloca
+     *   - the actual memory object of instrAlloca
      */
 
     var(x); var(y);
 
-    // type predicate. e.g. global(1) <-> 1 is a global
+    // type predicates
+
+    // e.g. global(1) <-> 1 is a global
     rel(global, Object);
     rel(function, Object);
+    rel(constant, Object);
     rel(instr, Object);
 
+    // element predicates
+    rel(hasArgument, Object /* function */, Object /* argument */);
     rel(hasInstr, Object /* function object */, Object /* instruction object */);
-    rel(hasOperand, Object /* instruction object */, Object /* operand */)
+    rel(hasOperand, Object /* instruction object */, Object /* operand */);
 
-    // alloca(2) <-> 2 is an alloca instruction
-    rel(alloca, Object /* instruction object */);
-    instr(x) <<= alloca(x); // alloca is an instruction
+    // some facts that we can infer
+    function(x) <<= hasArgument(x, _);
+    function(x) <<= hasInstr(x, _);
+    instr(x) <<= hasInstr(_, x);
 
-    rel(load, Object /* load result */, Object /* pointer object to load */);
-    instr(x) <<= load(x, _);
-    hasOperand(x, y) <<= load(x, y);
+    // instruction predicates
 
-    rel(store, Object, Object, Object);
-    instr(x) <<= store(x, _, _);
-    hasOperand(x, y) <<= store(x, y, _);
-    hasOperand(x, y) <<= store(x, _, y);
+    // instrAlloca(2) <-> 2 is an alloca instruction
+    rel(instrAlloca, Object /* instruction object */, Object /* memory object */);
+    instr(x) <<= instrAlloca(x, _); // instrAlloca is an instruction
+    hasOperand(x, y) <<= instrAlloca(x, y);
 
-    rel(unknown, Object);
-    // and various facts of hasOperand expected
+    // at of now, getelementptr is simply a copy instruction
+    rel(instrGetelementptr, Object, Object);
+    instr(x) <<= instrGetelementptr(x, _);
+    hasOperand(x, y) <<= instrGetelementptr(x, y);
 
-    rel(ret, Object);
-    instr(x) <<= ret(x);
-#endif
+    rel(instrLoad, Object /* load result/instruction */, Object /* pointer object to load */);
+    instr(x) <<= instrLoad(x, _);
+    hasOperand(x, y) <<= instrLoad(x, y);
+
+    rel(instrStore, Object, Object /* value */, Object /* pointer */);
+    instr(x) <<= instrStore(x, _, _);
+    hasOperand(x, y) <<= instrStore(x, y, _);
+    hasOperand(x, y) <<= instrStore(x, _, y);
+
+    rel(instrRet, Object, Object);
+    instr(x) <<= instrRet(x, _);
+    hasOperand(x, y) <<= instrRet(x, y);
+
+    rel(instrUnknown, Object);
+    instr(x) <<= instrUnknown(x);
+    // the client should emit hasOperand relations
+    // unknown instruction can do whatever possible to
+    // its operands
+
+#endif // #ifndef IN_DSL

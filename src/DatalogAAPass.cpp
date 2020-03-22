@@ -9,42 +9,58 @@ using namespace std;
 
 #include "DatalogDSL.h"
 
-static StandardDatalog::Program program = BEGIN
-    // a simple program for path finding
-
-    sort(V, 65536);
-
-    rel(vertex, V);
-    rel(edge, V, V);
-    rel(path, V, V);
-    var(x); var(y); var(z);
-
-    path(x, x) <<= vertex(x);
-    path(x, y) <<= edge(x, y);
-    path(x, z) <<= path(x, y) & path(y, z);
-
-    fact vertex(1);
-    fact vertex(2);
-    fact vertex(3);
-
-    fact edge(1, 2);
-    fact edge(2, 3);
+static StandardDatalog::Program andersen = BEGIN
+    #include "Analysis/Common.datalog"
+    { // add a layer of scope to prevent variable clashing
+        #include "Analysis/Andersen.datalog"
+    }
 END;
 
 #include "DatalogDSL.h" // toggle dsl off
 
-DatalogAAResult::DatalogAAResult(const llvm::Module &module): module(&module) {
+DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
+    unit(&unit), fact_generator(unit) {
     Z3Backend backend;
+    
+    StandardDatalog::Program program = andersen;
 
+    fact_generator.generateFacts(program);
+    
+    std::cerr << "================== program" << std::endl;
     std::cerr << program << std::endl;
+    std::cerr << "================== program" << std::endl;
 
     backend.load(program);
 
-    StandardDatalog::FormulaVector results = backend.query("path");
+    StandardDatalog::FormulaVector results = backend.query("pointsTo");
+
+    std::cerr << "================== results" << std::endl;
 
     for (auto result: results) {
-        std::cerr << result << std::endl;
+        unsigned int pointer_id = result.getArgument(0).getValue();
+        unsigned int value_id = result.getArgument(1).getValue();
+
+        const llvm::Value *pointer = fact_generator.getValueOfObjectID(pointer_id);
+        const llvm::Value *value = fact_generator.getValueOfObjectID(value_id);
+
+        std::cerr << result << " <=> ";
+        
+        if (pointer != NULL)
+            pointer->print(dbgs());
+        else
+            dbgs() << "<memory " << pointer_id << ">";
+        
+        std::cerr << " points to ";
+
+        if (value != NULL)
+            value->print(dbgs());
+        else
+            dbgs() << "<memory " << value_id << ">";
+
+        std::cerr << std::endl;
     }
+
+    std::cerr << "================== results" << std::endl;
 }
 
 AliasResult DatalogAAResult::alias(const MemoryLocation &location_a, const MemoryLocation &location_b) {

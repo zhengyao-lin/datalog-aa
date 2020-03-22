@@ -41,8 +41,8 @@ void Z3Backend::initRelationTable() {
 
         z3::sort_vector sorts(*context);
 
-        for (const std::string &name: relation.getArgumentSorts()) {
-            auto found = sort_table.find(name);
+        for (const std::string &sort_name: relation.getArgumentSortNames()) {
+            auto found = sort_table.find(sort_name);
             assert(found != sort_table.end() && "sort doesn't exist");
             sorts.push_back(found->second);
         }
@@ -74,7 +74,7 @@ void Z3Backend::load(const StandardDatalog::Program &program) {
 
         z3::expr rule = emitFormula(formula);
 
-        std::string rule_name = RULE_NAME_PREFIX + formula.getName() + "-" + std::to_string(rule_counter);
+        std::string rule_name = RULE_NAME_PREFIX + formula.getRelationName() + "-" + std::to_string(rule_counter);
         rule_counter++;
 
         fixedpoint->add_rule(rule, context->str_symbol(rule_name.c_str()));
@@ -83,7 +83,7 @@ void Z3Backend::load(const StandardDatalog::Program &program) {
 
 z3::expr Z3Backend::emitAtom(std::map<std::string, z3::expr> &var_table,
                              const StandardDatalog::Formula &atom) {
-    std::string relation_name = atom.getName();
+    std::string relation_name = atom.getRelationName();
     const StandardDatalog::Relation &relation = program.getRelation(relation_name);
 
     z3::expr_vector args(*context);
@@ -96,8 +96,8 @@ z3::expr Z3Backend::emitAtom(std::map<std::string, z3::expr> &var_table,
             
             args.push_back(var_table.at(term.getVariable()));
         } else {
-            const StandardDatalog::Sort &arg_sort = relation.getArgumentSort(idx);
-            unsigned int bit_size = sort_table.at(arg_sort.getName()).bv_size();
+            const std::string &arg_sort_name = relation.getArgumentSortName(idx);
+            unsigned int bit_size = sort_table.at(arg_sort_name).bv_size();
             z3::expr expr = context->bv_val(term.getValue(), bit_size);
         
             args.push_back(expr);
@@ -170,10 +170,10 @@ void Z3Backend::collectVariablesInTerm(std::map<std::string, z3::expr> &var_tabl
         std::string var = term.getVariable();
 
         if (var_table.find(var) == var_table.end()) {
-            const StandardDatalog::Sort &arg_sort =
-                program.getRelation(parent.getName()).getArgumentSort(index);
+            const std::string &arg_sort_name =
+                program.getRelation(parent.getRelationName()).getArgumentSortName(index);
 
-            z3::sort var_sort = sort_table.at(arg_sort.getName());
+            z3::sort var_sort = sort_table.at(arg_sort_name);
 
             std::string var_name = VARIABLE_PREFIX + std::to_string(var_counter);
             var_counter++;

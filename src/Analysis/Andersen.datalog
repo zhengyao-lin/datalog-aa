@@ -1,0 +1,19 @@
+#ifdef IN_DSL
+
+    var(i); var(x); var(y);
+    var(p); var(q);
+
+    rel(pointsTo, Object, Object);
+
+    pointsTo(x, y) <<= instrAlloca(x, y);
+
+    // p = *q
+    pointsTo(p, y) <<= instrLoad(p, q) & pointsTo(q, x) & pointsTo(x, y);
+
+    // *p = q
+    pointsTo(y, x) <<= instrStore(i, q, p) & pointsTo(q, x) & pointsTo(p, y);
+
+    // (similar to) p = q
+    pointsTo(p, x) <<= instrGetelementptr(p, q) & pointsTo(q, x);
+
+#endif // #ifdef IN_DSL

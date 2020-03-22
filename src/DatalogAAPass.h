@@ -5,11 +5,14 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Pass.h"
 
+#include "Analysis/FactGenerator.h"
+
 class DatalogAAResult: public llvm::AAResultBase<DatalogAAResult> {
-    const llvm::Module *module;
+    const llvm::Module *unit;
+    FactGenerator fact_generator;
 
 public:
-    DatalogAAResult(const llvm::Module &module);
+    DatalogAAResult(const llvm::Module &unit);
 
     llvm::AliasResult alias(const llvm::MemoryLocation &location_a, const llvm::MemoryLocation &location_b);
 };
@@ -26,8 +29,8 @@ public:
         };
     }
 
-    bool doInitialization(llvm::Module &module) override {
-        result.reset(new DatalogAAResult(module));
+    bool doInitialization(llvm::Module &unit) override {
+        result.reset(new DatalogAAResult(unit));
         return false;
     }
 
