@@ -10,10 +10,7 @@ using namespace std;
 #include "DatalogDSL.h"
 
 static StandardDatalog::Program andersen = BEGIN
-    #include "Analysis/Common.datalog"
-    { // add a layer of scope to prevent variable clashing
-        #include "Analysis/Andersen.datalog"
-    }
+    #include "Analysis/Andersen.datalog"
 END;
 
 #include "DatalogDSL.h" // toggle dsl off
@@ -26,41 +23,28 @@ DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
 
     fact_generator.generateFacts(program);
     
-    std::cerr << "================== program" << std::endl;
-    std::cerr << program << std::endl;
-    std::cerr << "================== program" << std::endl;
+    dbgs() << "================== program\n";
+    dbgs() << program << "\n";
+    dbgs() << "================== program\n";
 
     backend.load(program);
 
     StandardDatalog::FormulaVector results = backend.query("pointsTo");
 
-    std::cerr << "================== results" << std::endl;
+    dbgs() << "================== results\n";
 
     for (auto result: results) {
         unsigned int pointer_id = result.getArgument(0).getValue();
         unsigned int value_id = result.getArgument(1).getValue();
 
-        const llvm::Value *pointer = fact_generator.getValueOfObjectID(pointer_id);
-        const llvm::Value *value = fact_generator.getValueOfObjectID(value_id);
-
-        std::cerr << result << " <=> ";
-        
-        if (pointer != NULL)
-            pointer->print(dbgs());
-        else
-            dbgs() << "<memory " << pointer_id << ">";
-        
-        std::cerr << " points to ";
-
-        if (value != NULL)
-            value->print(dbgs());
-        else
-            dbgs() << "<memory " << value_id << ">";
-
-        std::cerr << std::endl;
+        dbgs() << result << " <=> ";
+        fact_generator.printObjectID(dbgs(), pointer_id);
+        dbgs() << " points to ";
+        fact_generator.printObjectID(dbgs(), value_id);
+        dbgs() << "\n";
     }
 
-    std::cerr << "================== results" << std::endl;
+    dbgs() << "================== results\n";
 }
 
 AliasResult DatalogAAResult::alias(const MemoryLocation &location_a, const MemoryLocation &location_b) {

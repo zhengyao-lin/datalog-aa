@@ -9,7 +9,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <iostream>
+
+#include "llvm/Support/raw_ostream.h"
 
 /**
  * This is a sorted subset of the language bddbddb supports
@@ -284,8 +285,8 @@ using StandardDatalog = Datalog<std::string, unsigned int>;
 /**
  * Prints out the program in the bddbddb syntax
  */
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Term &term);
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Formula &formula);
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Sort &sort);
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &relation);
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Program &program);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const StandardDatalog::Term &term);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const StandardDatalog::Formula &formula);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const StandardDatalog::Sort &sort);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const StandardDatalog::Relation &relation);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const StandardDatalog::Program &program);

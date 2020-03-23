@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "llvm/IR/Module.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include "DatalogIR.h"
 #include "Common.datalog"
@@ -30,8 +31,10 @@ class FactGenerator {
 
     DECLARE_REL(function, "Object");
     DECLARE_REL(constant, "Object");
+    DECLARE_REL(mem, "Object");
     DECLARE_REL(instr, "Object");
 
+    DECLARE_REL(hasValue, "Object", "Object");
     DECLARE_REL(hasArgument, "Object", "Object");
     DECLARE_REL(hasInstr, "Object", "Object");
     DECLARE_REL(hasOperand, "Object", "Object");
@@ -74,6 +77,8 @@ public:
     void generateFacts(StandardDatalog::Program &program) {
         generateFactsForModule(program, *unit);
     }
+
+    void printObjectID(llvm::raw_ostream &os, unsigned int id);
 
 private:
     /**

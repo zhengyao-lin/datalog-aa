@@ -29,19 +29,32 @@ enum {
     var(x); var(y);
 
     // type predicates
+    rel(object, Object);
 
     // e.g. global(1) <-> 1 is a global
     rel(global, Object);
     rel(function, Object);
     rel(constant, Object);
+    rel(mem, Object); // unamed memory object e.g. result of alloca
     rel(instr, Object);
 
+    object(x) <<= global(x);
+    object(x) <<= function(x);
+    object(x) <<= constant(x);
+    object(x) <<= mem(x);
+    object(x) <<= instr(x);
+
     // element predicates
+    
+    // this relation is used for capturing the
+    // recurring pattern of declaring a variable (w/ alloca, function, global, etc.)
+    // that points to another implicit chunk of memory
+    rel(hasValue, Object, Object);
     rel(hasArgument, Object /* function */, Object /* argument */);
     rel(hasInstr, Object /* function object */, Object /* instruction object */);
     rel(hasOperand, Object /* instruction object */, Object /* operand */);
 
-    // some facts that we can infer
+    // infer some types
     function(x) <<= hasArgument(x, _);
     function(x) <<= hasInstr(x, _);
     instr(x) <<= hasInstr(_, x);

@@ -1,6 +1,8 @@
 #include "DatalogIR.h"
 
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Term &term) {
+using namespace llvm;
+
+raw_ostream &operator<<(raw_ostream &out, const StandardDatalog::Term &term) {
     if (term.isVariable()) {
         out << term.getVariable();
     } else {
@@ -10,7 +12,7 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Term &term) {
     return out;
 }
 
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Formula &formula) {
+raw_ostream &operator<<(raw_ostream &out, const StandardDatalog::Formula &formula) {
     out << formula.getRelationName() << "("; 
     bool first = true;
 
@@ -44,12 +46,12 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Formula &form
     return out;
 }
 
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Sort &sort) {
+raw_ostream &operator<<(raw_ostream &out, const StandardDatalog::Sort &sort) {
     out << sort.getName() << " " << sort.getSize();
     return out;
 }
 
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &relation) {
+raw_ostream &operator<<(raw_ostream &out, const StandardDatalog::Relation &relation) {
     out << relation.getName() << "(";
     bool first = true;
     unsigned int var_indx = 0;
@@ -69,21 +71,21 @@ std::ostream &operator<<(std::ostream &out, const StandardDatalog::Relation &rel
     return out;
 }
 
-std::ostream &operator<<(std::ostream &out, const StandardDatalog::Program &program) {
+raw_ostream &operator<<(raw_ostream &out, const StandardDatalog::Program &program) {
     for (auto const &item: program.getSorts()) {
-        out << item.second << std::endl;
+        out << item.second << "\n";
     }
 
-    out << std::endl;
+    out << "\n";
 
     for (auto const &item: program.getRelations()) {
-        out << item.second << std::endl;
+        out << item.second << "\n";
     }
 
-    out << std::endl;
+    out << "\n";
 
     for (auto const &formula: program.getFormulas()) {
-        out << formula << "." << std::endl;
+        out << formula << ".\n";
     }
 
     return out;

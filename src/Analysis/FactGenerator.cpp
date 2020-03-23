@@ -7,6 +7,24 @@
 
 using namespace llvm;
 
+void FactGenerator::printObjectID(raw_ostream &os, unsigned int id) {
+    if (id < NUM_SPECIAL_OBJECTS) {
+        os << "<special " << id << ">";
+    } else if ((id - NUM_SPECIAL_OBJECTS) < valueList.size()) {
+        const llvm::Value *value = getValueOfObjectID(id);
+
+        if (value != NULL) {
+            os << "<llvm: ";
+            value->print(os);
+            os << ">";
+        } else {
+            os << "<affiliated " << id << ">";
+        }
+    } else {
+        os << "<affiliated " << id << ">";
+    }
+}
+
 void FactGenerator::initObjectIDForModule(const Module &unit) {
     for (const GlobalVariable &global: unit.globals()) {
         // we will distinguish between
@@ -38,8 +56,10 @@ void FactGenerator::initObjectIDForModule(const Module &unit) {
 }
 
 void FactGenerator::initObjectIDForFunction(const Function &function) {
-    // the function itself is also a (global) value
-    addValue(&function);
+    // the function itself is a pointer
+    // while it also points to the actual content
+    // of the function in memory
+    addValue(&function, 1);
 
     for (const Argument &arg: function.args()) {
         addValue(&arg);
@@ -99,8 +119,11 @@ void FactGenerator::generateFactsForModule(StandardDatalog::Program &program, co
 
 void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, const Function &function) {
     unsigned int function_id = getObjectIDOfValue(&function);
+    unsigned int function_mem_id = getAffiliatedObjectID(function_id, 1);
 
     program.addFormula(rel_function(function_id));
+    program.addFormula(rel_mem(function_mem_id));
+    program.addFormula(rel_hasValue(function_id, function_mem_id));
 
     for (const BasicBlock &block: function) {
         generateFactsForBasicBlock(program, block);
@@ -132,7 +155,10 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
     // add specific instruction facts
 
     if (auto *alloca_instr = dyn_cast<AllocaInst>(&instr)) {
-        program.addFormula(rel_instrAlloca(instr_id, getAffiliatedObjectID(instr_id, 1)));
+        unsigned int mem_id = getAffiliatedObjectID(instr_id, 1);
+
+        program.addFormula(rel_mem(mem_id));
+        program.addFormula(rel_instrAlloca(instr_id, mem_id));
 
     } else if (auto *getelementptr_instr = dyn_cast<GetElementPtrInst>(&instr)) {
         const Value *base = getelementptr_instr->getOperand(0);
