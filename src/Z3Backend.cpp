@@ -107,8 +107,13 @@ z3::expr Z3Backend::emitAtom(std::map<std::string, z3::expr> &var_table,
     }
 
     z3::func_decl func = relation_table.at(relation_name);
+    z3::expr formula = func(args);
 
-    return func(args);
+    if (atom.isNegated()) {
+        formula = !formula;
+    }
+
+    return formula;
 }
 
 z3::expr Z3Backend::emitFormula(const StandardDatalog::Formula &formula) {

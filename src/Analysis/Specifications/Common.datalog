@@ -1,0 +1,56 @@
+#ifndef IN_DSL
+#ifndef _COMMON_DATALOG_
+#define _COMMON_DATALOG_
+
+enum {
+    // ANY_OBJECT can contain
+    // pointers to ANY memory location
+    ANY_OBJECT = 0,
+    NUM_SPECIAL_OBJECTS
+};
+
+#endif // #ifndef _COMMON_DATALOG_
+#endif // #ifndef IN_DSL
+
+#ifdef IN_DSL
+    #include "Relations.datalog"
+
+    var(x); var(y);
+
+    object(x) <<= function(x);
+    object(x) <<= constant(x);
+    object(x) <<= instr(x);
+    object(x) <<= mem(x);
+
+    // infer some types
+    function(x) <<= hasArgument(x, _);
+    function(x) <<= hasInstr(x, _);
+    instr(x) <<= hasInstr(_, x);
+
+    // instruction predicates
+
+    // instrAlloca(2) <-> 2 is an alloca instruction
+    instr(x) <<= instrAlloca(x, _); // instrAlloca is an instruction
+    hasOperand(x, y) <<= instrAlloca(x, y);
+
+    // at of now, getelementptr is simply a copy instruction
+    instr(x) <<= instrGetelementptr(x, _);
+    hasOperand(x, y) <<= instrGetelementptr(x, y);
+
+    instr(x) <<= instrLoad(x, _);
+    hasOperand(x, y) <<= instrLoad(x, y);
+
+    instr(x) <<= instrStore(x, _, _);
+    hasOperand(x, y) <<= instrStore(x, y, _);
+    hasOperand(x, y) <<= instrStore(x, _, y);
+
+    instr(x) <<= instrRet(x, _);
+    hasOperand(x, y) <<= instrRet(x, y);
+
+    /**
+     * The client should emit hasOperand relations
+     * unknown instruction can do whatever possible to
+     * its operands
+     */
+    instr(x) <<= instrUnknown(x);
+#endif // #ifndef IN_DSL

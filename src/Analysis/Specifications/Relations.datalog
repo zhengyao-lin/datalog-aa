@@ -1,0 +1,43 @@
+/**
+ * This file only contains sort and rel declaration and
+ * is served for purposes:
+ *   1. as a common header to all datalog dsls
+ *   2. as a template to initialize "global" relations in FactGenerator.cpp
+ */
+
+#ifdef IN_DSL
+    /**
+     * Examples of objects:
+     *   - a global
+     *   - a function (pointer)
+     *   - result of instrAlloca
+     *   - the actual memory object of instrAlloca
+     */
+
+    sort(Object, 65535);
+
+    /* types */
+    rel(object, Object);
+    rel(function, Object);
+    rel(constant, Object);
+    rel(instr, Object);
+    rel(mem, Object); /* unamed memory object e.g. result of alloca */
+
+    /* properties */
+    rel(immutable, Object);
+    rel(nonaddressable, Object);
+
+    /* element relations */
+    rel(hasValue, Object, Object);
+    rel(hasArgument, Object /* function */, Object /* argument */);
+    rel(hasInstr, Object /* function object */, Object /* instruction object */);
+    rel(hasOperand, Object /* instruction object */, Object /* operand */);
+
+    /* instructions */
+    rel(instrAlloca, Object /* instruction object */, Object /* memory object */);
+    rel(instrGetelementptr, Object, Object);
+    rel(instrLoad, Object /* load result/instruction */, Object /* pointer object to load */);
+    rel(instrStore, Object, Object /* value */, Object /* pointer */);
+    rel(instrRet, Object, Object);
+    rel(instrUnknown, Object);
+#endif // #ifdef IN_DSL

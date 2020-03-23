@@ -125,6 +125,23 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
     program.addFormula(rel_mem(function_mem_id));
     program.addFormula(rel_hasValue(function_id, function_mem_id));
 
+    // both function pointer and function object are immutable
+    program.addFormula(rel_immutable(function_id));
+    program.addFormula(rel_immutable(function_mem_id));
+
+    // NOTE that the function pointer is non-addressable
+    // but the function object itself is addressable (in particular by the pointer)
+    program.addFormula(rel_nonaddressable(function_id));
+
+    for (const Value &arg: function.args()) {
+        unsigned int arg_id = getObjectIDOfValue(&arg);
+
+        // TODO: check if this is true (variadic argument?)
+        program.addFormula(rel_nonaddressable(arg_id));
+
+        program.addFormula(rel_immutable(arg_id));
+    }
+
     for (const BasicBlock &block: function) {
         generateFactsForBasicBlock(program, block);
     }
@@ -133,10 +150,6 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
 void FactGenerator::generateFactsForBasicBlock(StandardDatalog::Program &program, const BasicBlock &block) {
     for (const Instruction &instr: block) {
         generateFactsForInstruction(program, instr);
-
-        unsigned int instr_id = getObjectIDOfValue(&instr);
-
-        program.addFormula(rel_instr(instr_id));
     }
 }
 
@@ -147,12 +160,19 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
     program.addFormula(rel_instr(instr_id));
     program.addFormula(rel_hasInstr(function_id, instr_id));
 
+    // result of an instruction is immutable and non-addressable
+    // because we are in SSA form
+    program.addFormula(rel_immutable(instr_id));
+    program.addFormula(rel_nonaddressable(instr_id));
+
     for (const Use &operand: instr.operands()) {
         unsigned int operand_id = getObjectIDOfValue(operand);
         program.addFormula(rel_hasOperand(instr_id, operand_id));
     }
 
-    // add specific instruction facts
+    /**
+     * Add specific instruction facts
+     */
 
     if (auto *alloca_instr = dyn_cast<AllocaInst>(&instr)) {
         unsigned int mem_id = getAffiliatedObjectID(instr_id, 1);
@@ -186,10 +206,7 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
         unsigned int value_id = getObjectIDOfValue(value);
 
         program.addFormula(rel_instrRet(instr_id, value_id));
-
     } else {
-        // unknown
-
         program.addFormula(rel_instrUnknown(instr_id));
 
         dbgs() << "unsupported instruction ";

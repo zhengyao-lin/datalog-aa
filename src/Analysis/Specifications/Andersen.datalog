@@ -1,0 +1,44 @@
+#ifdef IN_DSL
+    #include "Common.datalog"
+    {
+        var(i); var(x); var(y); var(z);
+        var(p); var(q);
+
+        rel(pointsTo, Object, Object);
+        rel(pointsToIndirectly, Object, Object); // transitive-reflexive closure of pointsTo
+
+        pointsTo(p, x) <<= hasValue(p, x);
+
+        pointsTo(x, y) <<= instrAlloca(x, y);
+
+        // p = *q
+        pointsTo(p, y) <<= instrLoad(p, q) & pointsTo(q, x) & pointsTo(x, y);
+
+        // *p = q
+        pointsTo(y, x) <<= instrStore(i, q, p) & pointsTo(q, x) & pointsTo(p, y);
+
+        // (similar to) p = q
+        pointsTo(p, x) <<= instrGetelementptr(p, q) & pointsTo(q, x);
+
+        // reflexive-transitive closure
+        pointsToIndirectly(x, x) <<= object(x);
+        pointsToIndirectly(x, y) <<= pointsTo(x, y);
+        pointsToIndirectly(x, z) <<= pointsTo(x, y) & pointsTo(y, z);
+
+        // ANY_OBJECT points to anything
+        pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
+        
+        // unknown instructions can do anything to its operands
+        pointsTo(i, x) <<= instrUnknown(i)
+                        & object(x)
+                        & !nonaddressable(z);
+
+        pointsTo(y, z) <<= instrUnknown(i)
+                        & hasOperand(i, x)
+                        & pointsToIndirectly(x, y)
+                        & object(z)
+                        & !immutable(y)
+                        & !nonaddressable(z);
+        // TODO: unknown instruction can potentially change all globals
+    }
+#endif // #ifdef IN_DSL

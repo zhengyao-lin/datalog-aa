@@ -10,7 +10,7 @@ using namespace std;
 #include "DatalogDSL.h"
 
 static StandardDatalog::Program andersen = BEGIN
-    #include "Analysis/Andersen.datalog"
+    #include "Analysis/Specifications/Andersen.datalog"
 END;
 
 #include "DatalogDSL.h" // toggle dsl off

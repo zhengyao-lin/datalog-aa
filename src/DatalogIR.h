@@ -21,6 +21,7 @@
  *       | variable
  * 
  * atom := R(term [, term]*) where R is a relation symbol
+ *       | not atom
  * 
  * formula := atom
  *          | atom <- atom [, atom]*
@@ -68,6 +69,8 @@ public:
         TermVector args;
         FormulaVector body;
 
+        bool negated = false;
+
     public:
         Formula(const S &relation_name, const TermVector &args):
             relation_name(relation_name), args(args) {}
@@ -109,6 +112,20 @@ public:
         template<typename ...Ts>
         Formula given(Ts ...args) {
             return Formula(*this, parseFormulaVector<Ts...>(args...));
+        }
+
+        Formula negate() const {
+            Formula copy(*this);
+            copy.negated = !negated;
+            return copy;
+        }
+
+        bool isNegated() const {
+            return negated;
+        }
+
+        Formula operator!() const {
+            return negate();
         }
 
         const TermVector &getArguments() const { return args; }
@@ -206,6 +223,9 @@ public:
         }
 
         // TODO: add well-formness check
+        // to guarantee decidability, need to check
+        //   1. all relations and formulas are well-formed
+        //   2. negations can be stratified
         bool isWellFormed() const;
     };
 

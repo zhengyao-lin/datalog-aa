@@ -72,6 +72,10 @@ struct DatalogDSLAtom {
         body.append(other.atom);
         return body;
     }
+
+    inline DatalogDSLAtom operator!() const {
+        return DatalogDSLAtom(*env, !atom);
+    }
 };
 
 struct DatalogDSLRelation {

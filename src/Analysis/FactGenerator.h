@@ -7,7 +7,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "DatalogIR.h"
-#include "Common.datalog"
+#include "Analysis/Specifications/Common.datalog"
 
 /**
  * FactGenerator manages the mapping between values and
@@ -24,30 +24,17 @@ class FactGenerator {
     std::vector<const llvm::Value *> valueList;
 
     // relations required in the program
-    // TODO: need to keep them in sync
-    // with what's in Common.datalog
-    #define DECLARE_REL(name, ...) \
+    #define sort(name, size) std::string name = #name;
+    #define rel(name, ...) \
         StandardDatalog::Relation rel_##name = StandardDatalog::Relation(#name, __VA_ARGS__)
 
-    DECLARE_REL(function, "Object");
-    DECLARE_REL(constant, "Object");
-    DECLARE_REL(mem, "Object");
-    DECLARE_REL(instr, "Object");
+    #define IN_DSL
 
-    DECLARE_REL(hasValue, "Object", "Object");
-    DECLARE_REL(hasArgument, "Object", "Object");
-    DECLARE_REL(hasInstr, "Object", "Object");
-    DECLARE_REL(hasOperand, "Object", "Object");
+    #include "Analysis/Specifications/Relations.datalog"
 
-    DECLARE_REL(instrAlloca, "Object", "Object");
-    DECLARE_REL(instrGetelementptr, "Object", "Object");
-    DECLARE_REL(instrLoad, "Object", "Object");
-    DECLARE_REL(instrStore, "Object", "Object", "Object");
-    DECLARE_REL(instrRet, "Object", "Object");
-
-    DECLARE_REL(instrUnknown, "Object");
-
-    #undef DECLARE_REL
+    #undef sort
+    #undef rel
+    #undef IN_DSL
 
 public:
     FactGenerator(const llvm::Module &unit): unit(&unit) {
