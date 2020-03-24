@@ -41,6 +41,10 @@ public:
         initObjectIDForModule(unit);
     }
 
+    bool isValidObjectID(unsigned int id) {
+        return id - NUM_SPECIAL_OBJECTS < valueList.size();
+    }
+
     unsigned int getObjectIDOfValue(const llvm::Value *value) {
         assert(valueToObjectID.find(value) != valueToObjectID.end() &&
                "value does not exist");
@@ -64,8 +68,6 @@ public:
     void generateFacts(StandardDatalog::Program &program) {
         generateFactsForModule(program, *unit);
     }
-
-    void printObjectID(llvm::raw_ostream &os, unsigned int id);
 
 private:
     /**

@@ -3,27 +3,10 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/Debug.h"
 
+#include "ValuePrinter.h"
 #include "FactGenerator.h"
 
 using namespace llvm;
-
-void FactGenerator::printObjectID(raw_ostream &os, unsigned int id) {
-    if (id < NUM_SPECIAL_OBJECTS) {
-        os << "<special " << id << ">";
-    } else if ((id - NUM_SPECIAL_OBJECTS) < valueList.size()) {
-        const llvm::Value *value = getValueOfObjectID(id);
-
-        if (value != NULL) {
-            os << "<llvm: ";
-            value->print(os);
-            os << ">";
-        } else {
-            os << "<affiliated " << id << ">";
-        }
-    } else {
-        os << "<affiliated " << id << ">";
-    }
-}
 
 void FactGenerator::initObjectIDForModule(const Module &unit) {
     for (const GlobalVariable &global: unit.globals()) {
@@ -41,18 +24,18 @@ void FactGenerator::initObjectIDForModule(const Module &unit) {
         initObjectIDForFunction(function);
     }
 
-    dbgs() << "================== value map\n";
+    // dbgs() << "================== value map\n";
 
-    // for debug, print out everything
-    for (const Value *value: valueList) {
-        if (value != NULL) {
-            dbgs() << "value ";
-            value->print(dbgs());
-            dbgs() << " -> " << getObjectIDOfValue(value) << "\n";
-        }
-    }
+    // // for debug, print out everything
+    // for (const Value *value: valueList) {
+    //     if (value != NULL) {
+    //         dbgs() << "value ";
+    //         value->print(dbgs());
+    //         dbgs() << " -> " << getObjectIDOfValue(value) << "\n";
+    //     }
+    // }
 
-    dbgs() << "================== value map\n";
+    // dbgs() << "================== value map\n";
 }
 
 void FactGenerator::initObjectIDForFunction(const Function &function) {

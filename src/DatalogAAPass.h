@@ -15,6 +15,13 @@ public:
     DatalogAAResult(const llvm::Module &unit);
 
     llvm::AliasResult alias(const llvm::MemoryLocation &location_a, const llvm::MemoryLocation &location_b);
+
+private:
+    /**
+     * Looks up and prints an object id in a readable format
+     * Result of this will also be used in testing
+     */
+    void printObjectID(llvm::raw_ostream &os, unsigned int id);
 };
 
 class DatalogAAPass: public llvm::ExternalAAWrapperPass {

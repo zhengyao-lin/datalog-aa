@@ -1,8 +1,7 @@
 /**
- * This file only contains sort and rel declaration and
- * is served for purposes:
+ * This file only contains sort and rel declarations and is served for two purposes:
  *   1. as a common header to all datalog dsls
- *   2. as a template to initialize "global" relations in FactGenerator.cpp
+ *   2. as a template to initialize "global" relations in FactGenerator.h
  */
 
 #ifdef IN_DSL

@@ -30,15 +30,15 @@
         
         // unknown instructions can do anything to its operands
         pointsTo(i, x) <<= instrUnknown(i)
-                        & object(x)
-                        & !nonaddressable(z);
+                         & object(x)
+                         & !nonaddressable(x);
 
         pointsTo(y, z) <<= instrUnknown(i)
-                        & hasOperand(i, x)
-                        & pointsToIndirectly(x, y)
-                        & object(z)
-                        & !immutable(y)
-                        & !nonaddressable(z);
+                         & hasOperand(i, x)
+                         & pointsToIndirectly(x, y)
+                         & object(z)
+                         & !immutable(y)
+                         & !nonaddressable(z);
         // TODO: unknown instruction can potentially change all globals
     }
 #endif // #ifdef IN_DSL

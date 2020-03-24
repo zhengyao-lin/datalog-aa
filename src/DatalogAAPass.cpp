@@ -1,6 +1,9 @@
+#include "llvm/Support/CommandLine.h"
+
 #include "DatalogAAPass.h"
 #include "DatalogIR.h"
 #include "Z3Backend.h"
+#include "ValuePrinter.h"
 
 #define DEBUG_TYPE "datalog-aa"
 
@@ -15,6 +18,12 @@ END;
 
 #include "DatalogDSL.h" // toggle dsl off
 
+cl::opt<bool> optionPrintPtsTo(
+    "datalog-aa-print-pts-to", cl::NotHidden,
+    cl::desc("Print the entire (may) points-to relation"),
+    cl::init(true)
+);
+
 DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
     unit(&unit), fact_generator(unit) {
     Z3Backend backend;
@@ -23,28 +32,64 @@ DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
 
     fact_generator.generateFacts(program);
     
-    dbgs() << "================== program\n";
-    dbgs() << program << "\n";
-    dbgs() << "================== program\n";
+    // dbgs() << "================== program\n";
+    // dbgs() << program << "\n";
+    // dbgs() << "================== program\n";
 
     backend.load(program);
 
     StandardDatalog::FormulaVector results = backend.query("pointsTo");
 
-    dbgs() << "================== results\n";
+    if (optionPrintPtsTo.getValue()) {
+        dbgs() << "================== points-to relation\n";
 
-    for (auto result: results) {
-        unsigned int pointer_id = result.getArgument(0).getValue();
-        unsigned int value_id = result.getArgument(1).getValue();
+        for (auto result: results) {
+            unsigned int pointer_id = result.getArgument(0).getValue();
+            unsigned int value_id = result.getArgument(1).getValue();
 
-        dbgs() << result << " <=> ";
-        fact_generator.printObjectID(dbgs(), pointer_id);
-        dbgs() << " points to ";
-        fact_generator.printObjectID(dbgs(), value_id);
-        dbgs() << "\n";
+            // dbgs() << result << " <=> ";
+            printObjectID(dbgs(), pointer_id);
+            dbgs() << " -> ";
+            printObjectID(dbgs(), value_id);
+            dbgs() << "\n";
+        }
+
+        dbgs() << "================== points-to relation\n";
     }
+}
 
-    dbgs() << "================== results\n";
+void DatalogAAResult::printObjectID(raw_ostream &os, unsigned int id) {
+    if (id < NUM_SPECIAL_OBJECTS) {
+        switch (id) {
+            case ANY_OBJECT: os << "any"; break;
+            default: os << "special(" << id << ")";
+        }
+    } else if (fact_generator.isValidObjectID(id)) {
+        const llvm::Value *value = fact_generator.getValueOfObjectID(id);
+
+        if (value != NULL) {
+            ValuePrinter::printUniqueName(os, value);
+        } else {
+            // for affiliated objects, try to find
+            // the original object. not very efficient
+            // but it will do for debugging
+            unsigned int op = 0;
+
+            do {
+                op++; id--;
+
+                const llvm::Value *value = fact_generator.getValueOfObjectID(id);
+
+                if (value != NULL) {
+                    ValuePrinter::printUniqueName(os, value);
+                    os << "::aff(" << op << ")";
+                    return;
+                }
+            } while (id >= NUM_SPECIAL_OBJECTS);
+        }
+    } else {
+        assert(0 && "dangling affiliated object");
+    }
 }
 
 AliasResult DatalogAAResult::alias(const MemoryLocation &location_a, const MemoryLocation &location_b) {
