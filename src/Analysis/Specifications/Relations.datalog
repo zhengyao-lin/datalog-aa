@@ -17,8 +17,9 @@
 
     /* types */
     rel(object, Object);
+    rel(global, Object);
     rel(function, Object);
-    rel(constant, Object);
+    rel(block, Object); /* basic block */
     rel(instr, Object);
     rel(mem, Object); /* unamed memory object e.g. result of alloca */
 
@@ -27,16 +28,26 @@
     rel(nonaddressable, Object);
 
     /* element relations */
-    rel(hasValue, Object, Object);
     rel(hasArgument, Object /* function */, Object /* argument */);
+    rel(hasBlock, Object /* function */, Object);
     rel(hasInstr, Object /* function object */, Object /* instruction object */);
     rel(hasOperand, Object /* instruction object */, Object /* operand */);
+
+    /* abstract operations (note the order of operands) */
+    rel(pointsTo, Object, Object);
+    rel(pointsToIndirectly, Object, Object); // transitive-reflexive closure of pointsTo
+    rel(copy, Object /* x */, Object /* y */); /* x = y */
+    rel(load, Object /* x */, Object /* y */); /* x = *y */
+    rel(store, Object /* y */, Object /* x */); /* *x = y */
 
     /* instructions */
     rel(instrAlloca, Object /* instruction object */, Object /* memory object */);
     rel(instrGetelementptr, Object, Object);
     rel(instrLoad, Object /* load result/instruction */, Object /* pointer object to load */);
     rel(instrStore, Object, Object /* value */, Object /* pointer */);
+    rel(instrBitCast, Object, Object);
+    rel(instrIntToPtr, Object, Object);
+    rel(instrPHI, Object);
     rel(instrRet, Object, Object);
     rel(instrUnknown, Object);
 #endif // #ifdef IN_DSL

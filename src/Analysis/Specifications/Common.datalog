@@ -15,10 +15,11 @@ enum {
 #ifdef IN_DSL
     #include "Relations.datalog"
 
-    var(x); var(y);
+    var(x); var(y); var(z);
 
+    object(x) <<= global(x);
     object(x) <<= function(x);
-    object(x) <<= constant(x);
+    object(x) <<= block(x);
     object(x) <<= instr(x);
     object(x) <<= mem(x);
 
@@ -26,6 +27,18 @@ enum {
     function(x) <<= hasArgument(x, _);
     function(x) <<= hasInstr(x, _);
     instr(x) <<= hasInstr(_, x);
+    function(x) <<= hasBlock(x, _);
+    block(x) <<= hasBlock(_, x);
+
+    // reflexive-transitive closure
+    pointsToIndirectly(x, x) <<= object(x);
+    pointsToIndirectly(x, y) <<= pointsTo(x, y);
+    pointsToIndirectly(x, z) <<= pointsTo(x, y) & pointsTo(y, z);
+
+    // copy is reflexive and transitive
+    // but NOT symmetric
+    copy(x, x) <<= object(x);
+    copy(x, z) <<= copy(x, y) & copy(y, z);
 
     // instruction predicates
 

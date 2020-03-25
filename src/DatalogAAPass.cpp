@@ -41,17 +41,32 @@ DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
     StandardDatalog::FormulaVector results = backend.query("pointsTo");
 
     if (optionPrintPtsTo.getValue()) {
+        dbgs() << "================== all addressable objects\n";
+
+        for (auto result: results) {
+            unsigned int value_id = result.getArgument(1).getValue();
+
+            if (result.getArgument(0).getValue() == ANY_OBJECT) {
+                printObjectID(dbgs(), value_id);
+                dbgs() << "\n";
+            }
+        }
+
+        dbgs() << "================== all addressable objects\n";
+
         dbgs() << "================== points-to relation\n";
 
         for (auto result: results) {
             unsigned int pointer_id = result.getArgument(0).getValue();
             unsigned int value_id = result.getArgument(1).getValue();
 
-            // dbgs() << result << " <=> ";
-            printObjectID(dbgs(), pointer_id);
-            dbgs() << " -> ";
-            printObjectID(dbgs(), value_id);
-            dbgs() << "\n";
+            if (pointer_id != ANY_OBJECT) {
+                // dbgs() << result << " <=> ";
+                printObjectID(dbgs(), pointer_id);
+                dbgs() << " -> ";
+                printObjectID(dbgs(), value_id);
+                dbgs() << "\n";
+            }
         }
 
         dbgs() << "================== points-to relation\n";

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include "llvm/IR/Module.h"
@@ -22,6 +23,8 @@ class FactGenerator {
     // NOTE: the actual object id of the values in this list
     // is offsetted by NUM_SPECIAL_OBJECTS
     std::vector<const llvm::Value *> valueList;
+
+    std::set<const llvm::Constant *> initializedConstants;
 
     // relations required in the program
     #define sort(name, size) std::string name = #name;
@@ -111,7 +114,7 @@ private:
     void generateFactsForModule(StandardDatalog::Program &program, const llvm::Module &unit);
     void generateFactsForFunction(StandardDatalog::Program &program, const llvm::Function &function);
     void generateFactsForBasicBlock(StandardDatalog::Program &program, const llvm::BasicBlock &block);
-    void generateFactsForInstruction(StandardDatalog::Program &program, const llvm::Instruction &instr);
+    void generateFactsForInstruction(StandardDatalog::Program &program, const llvm::User &instr);
     void generateFactsForGlobalVariable(StandardDatalog::Program &program, const llvm::GlobalVariable &global);
     void generateFactsForConstant(StandardDatalog::Program &program, const llvm::Constant &constant);
 };

@@ -68,11 +68,12 @@ void FactGenerator::initObjectIDForBasicBlock(const BasicBlock &block) {
 void FactGenerator::initObjectIDForConstant(const Constant &constant) {
     addValue(&constant);
 
-    // constant expr may have operands
-    if (auto *expr = dyn_cast<ConstantExpr>(&constant)) {
-        for (const Use &operand: expr->operands()) {
-            addValue(operand);
-        }
+    // constant may have operands in case of
+    // constant aggregate or constant expression
+    for (const Use &operand: constant.operands()) {
+        auto *constant_operand = dyn_cast<Constant>(operand);
+        assert(constant_operand && "non-constant operand of constant value");
+        initObjectIDForConstant(*constant_operand);
     }
 }
 
@@ -93,11 +94,21 @@ unsigned int FactGenerator::getAffiliatedObjectCountForInstruction(const llvm::I
  */
 
 void FactGenerator::generateFactsForModule(StandardDatalog::Program &program, const Module &unit) {
-    // TODO: leave constants alone for now
+    initializedConstants.clear();
+
+    // similar to alloca, a global variable has two objects associated with it
+    // the variable itself, which points to the actual mem object
+    for (const GlobalVariable &global: unit.globals()) {
+        generateFactsForGlobalVariable(program, global);
+    }
 
     for (const Function &function: unit) {
         generateFactsForFunction(program, function);
     }
+
+    // TODO: it would be nice if we can
+    // go through all constants here without
+    // recursively finding all constants
 }
 
 void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, const Function &function) {
@@ -106,7 +117,7 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
 
     program.addFormula(rel_function(function_id));
     program.addFormula(rel_mem(function_mem_id));
-    program.addFormula(rel_hasValue(function_id, function_mem_id));
+    program.addFormula(rel_pointsTo(function_id, function_mem_id));
 
     // both function pointer and function object are immutable
     program.addFormula(rel_immutable(function_id));
@@ -131,72 +142,228 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
 }
 
 void FactGenerator::generateFactsForBasicBlock(StandardDatalog::Program &program, const BasicBlock &block) {
+    unsigned int block_id = getObjectIDOfValue(&block);
+    unsigned int function_id = getObjectIDOfValue(block.getParent());
+
+    program.addFormula(rel_block(block_id));
+    program.addFormula(rel_immutable(block_id));
+    program.addFormula(rel_hasBlock(function_id, block_id));
+
     for (const Instruction &instr: block) {
         generateFactsForInstruction(program, instr);
     }
 }
 
-void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &program, const Instruction &instr) {
-    unsigned int instr_id = getObjectIDOfValue(&instr);
-    unsigned int function_id = getObjectIDOfValue(instr.getParent()->getParent());
+/**
+ * Generate facts for both instructions and constant expressions
+ */
+void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &program, const User &user) {
+    unsigned int opcode;
+    unsigned int instr_id = getObjectIDOfValue(&user);
+
+    if (auto *instr = dyn_cast<Instruction>(&user)) {
+        unsigned int function_id = getObjectIDOfValue(instr->getParent()->getParent());
+        opcode = instr->getOpcode();
+        program.addFormula(rel_hasInstr(function_id, instr_id));
+    } else if (auto *expr = dyn_cast<ConstantExpr>(&user)) {
+        opcode = expr->getOpcode();
+    } else {
+        assert(0 && "not an instruction or constant expression");
+    }
 
     program.addFormula(rel_instr(instr_id));
-    program.addFormula(rel_hasInstr(function_id, instr_id));
 
     // result of an instruction is immutable and non-addressable
     // because we are in SSA form
     program.addFormula(rel_immutable(instr_id));
     program.addFormula(rel_nonaddressable(instr_id));
 
-    for (const Use &operand: instr.operands()) {
+    for (const Use &operand: user.operands()) {
         unsigned int operand_id = getObjectIDOfValue(operand);
         program.addFormula(rel_hasOperand(instr_id, operand_id));
+
+        // TODO: can there be other kinds of operands?
+
+        if (auto *constant = dyn_cast<Constant>(operand)) {
+            generateFactsForConstant(program, *constant);
+        } else {
+            assert((isa<BasicBlock>(operand) || isa<Instruction>(operand)) &&
+                   "unexpected type of operand");
+        }
     }
 
-    /**
-     * Add specific instruction facts
-     */
+    switch (opcode) {
+        case Instruction::Alloca: {
+            unsigned int mem_id = getAffiliatedObjectID(instr_id, 1);
+            program.addFormula(rel_mem(mem_id));
+            program.addFormula(rel_instrAlloca(instr_id, mem_id));
+            break;
+        }
 
-    if (auto *alloca_instr = dyn_cast<AllocaInst>(&instr)) {
-        unsigned int mem_id = getAffiliatedObjectID(instr_id, 1);
+        case Instruction::GetElementPtr: {
+            const Value *base = user.getOperand(0);
+            unsigned int base_id = getObjectIDOfValue(base);
+            program.addFormula(rel_instrGetelementptr(instr_id, base_id));
+            break;
+        }
 
-        program.addFormula(rel_mem(mem_id));
-        program.addFormula(rel_instrAlloca(instr_id, mem_id));
+        case Instruction::Load: {
+            const Value *src = user.getOperand(0);
+            unsigned int src_id = getObjectIDOfValue(src);
+            program.addFormula(rel_instrLoad(instr_id, src_id));
+            break;
+        }
 
-    } else if (auto *getelementptr_instr = dyn_cast<GetElementPtrInst>(&instr)) {
-        const Value *base = getelementptr_instr->getOperand(0);
-        unsigned int base_id = getObjectIDOfValue(base);
+        case Instruction::Store: {
+            const Value *value = user.getOperand(0);
+            unsigned int value_id = getObjectIDOfValue(value);
 
-        program.addFormula(rel_instrGetelementptr(instr_id, base_id));
+            const Value *dest = user.getOperand(1);
+            unsigned int dest_id = getObjectIDOfValue(dest);
 
-    } else if (auto *load_instr = dyn_cast<LoadInst>(&instr)) {
-        const Value *src = load_instr->getOperand(0);
-        unsigned int src_id = getObjectIDOfValue(src);
+            program.addFormula(rel_instrStore(instr_id, value_id, dest_id));
+            break;
+        }
 
-        program.addFormula(rel_instrLoad(instr_id, src_id));
+        case Instruction::Ret: {
+            const Value *value = user.getOperand(0);
+            unsigned int value_id = getObjectIDOfValue(value);
+            program.addFormula(rel_instrRet(instr_id, value_id));
+            break;
+        }
 
-    } else if (auto *store_instr = dyn_cast<StoreInst>(&instr)) {
-        const Value *value = store_instr->getOperand(0);
-        unsigned int value_id = getObjectIDOfValue(value);
+        case Instruction::BitCast: {
+            const Value *value = user.getOperand(0);
+            unsigned int value_id = getObjectIDOfValue(value);
+            program.addFormula(rel_instrBitCast(instr_id, value_id));
+            break;
+        }
 
-        const Value *dest = store_instr->getOperand(1);
-        unsigned int dest_id = getObjectIDOfValue(dest);
+        case Instruction::IntToPtr: {
+            // TODO: being most conservative right now and assume
+            // this can point to anything
+            const Value *value = user.getOperand(0);
+            unsigned int value_id = getObjectIDOfValue(value);
+            program.addFormula(rel_instrIntToPtr(instr_id, value_id));
+            break;
+        }
 
-        program.addFormula(rel_instrStore(instr_id, value_id, dest_id));
+        case Instruction::PHI: {
+            program.addFormula(rel_instrPHI(instr_id));
+            break;
+        }
 
-    } else if (auto *ret_instr = dyn_cast<ReturnInst>(&instr)) {
-        const Value *value = ret_instr->getOperand(0);
-        unsigned int value_id = getObjectIDOfValue(value);
+        case Instruction::Br: {
+            // TODO: ignore for now since we are
+            // currently flow-insensitive
+            break;
+        }
 
-        program.addFormula(rel_instrRet(instr_id, value_id));
-    } else {
-        program.addFormula(rel_instrUnknown(instr_id));
-
-        dbgs() << "unsupported instruction ";
-        instr.print(dbgs());
-        dbgs() << "\n";
+        default:
+            program.addFormula(rel_instrUnknown(instr_id));
+            dbgs() << "unsupported instruction ";
+            user.print(dbgs());
+            dbgs() << "\n";
     }
 }
 
-// void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &program, const GlobalVariable &global);
-// void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, const Constant &constant);
+void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &program, const GlobalVariable &global) {
+    unsigned int global_id = getObjectIDOfValue(&global);
+    unsigned int global_mem_id = getAffiliatedObjectID(global_id, 1);
+
+    program.addFormula(rel_global(global_id));
+
+    // the pointer to a global variable is immutable
+    program.addFormula(rel_immutable(global_id));
+    program.addFormula(rel_nonaddressable(global_id));
+
+    // a few properties to consider
+    //   1. constant (immutable)
+    //   2. initializer (which may reference other memory objects)
+    //   3. external (global var points to any object)
+
+    if (global.hasInitializer()) {
+        const Constant *initializer = global.getInitializer();
+        unsigned int initializer_id = getObjectIDOfValue(initializer);
+
+        // NOTE if the variable is constant
+        // then the compiler is free to use the same
+        // space for multiple constants so to be conservative
+        // we need to point to the same location
+        //
+        // otherwise, each (non-external) global variable would have their
+        // own memory location (global_mem_id)
+        if (global.isConstant()) {
+            program.addFormula(rel_pointsTo(global_id, initializer_id));
+        } else {
+            program.addFormula(rel_mem(global_mem_id));
+            program.addFormula(rel_pointsTo(global_id, global_mem_id));
+            program.addFormula(rel_copy(global_mem_id, initializer_id));
+        }
+
+        generateFactsForConstant(program, *initializer);
+    } else {
+        // NOTE that we need to distinguish two cases
+        //   - a pointer potentially pointing to any object
+        //   - a pointer (e.g. global) pointing to a unknown object
+        //     which, in turn, can point to anything
+        // in this case, global_var_id points to a (persumably)
+        // unique location, but we just don't know its content
+
+        dbgs() << "global ";
+        global.print(dbgs());
+        dbgs() << " has no initializer\n";
+
+        program.addFormula(rel_pointsTo(global_id, ANY_OBJECT));
+    }
+}
+
+void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, const Constant &constant) {
+    if (initializedConstants.find(&constant) != initializedConstants.end()) {
+        return;
+    }
+
+    initializedConstants.insert(&constant);
+
+    unsigned int constant_id = getObjectIDOfValue(&constant);
+
+    program.addFormula(rel_immutable(constant_id));
+
+    // to be conservative, assume same constants
+    // implies same memory location
+    program.addFormula(rel_mem(constant_id));
+
+    for (const Use &operand: constant.operands()) {
+        auto *constant = dyn_cast<Constant>(operand);
+        assert(constant && "non-constant operand of constant value");
+        generateFactsForConstant(program, *constant);
+    }
+
+    if (auto *aggregate = dyn_cast<ConstantAggregate>(&constant)) {
+        // aggregate and all of its fields are alias of each other
+        for (const Use &operand: constant.operands()) {
+            auto operand_id = getObjectIDOfValue(operand);
+            program.addFormula(rel_copy(constant_id, operand_id));
+        }
+
+    } else if (auto *expr = dyn_cast<ConstantExpr>(&constant)) {
+        // this is essentially an instruction
+        generateFactsForInstruction(program, *expr);
+    } else if (auto *global = dyn_cast<GlobalValue>(&constant)) {
+        // already handled in other functions
+    } else if (auto *data = dyn_cast<ConstantData>(&constant)) {
+        // including undef
+        // TODO: too conservative here
+
+        if (data->getType()->isPointerTy()) {
+            if (isa<UndefValue>(data)) {
+                program.addFormula(rel_copy(constant_id, ANY_OBJECT));
+            } else if (isa<ConstantPointerNull>(data)) {
+                // simply use the mem object allocated above
+            }
+        }
+    } else {
+        // TODO: missing support for basic block address
+        assert(0 && "unsupported constant type");
+    }
+}

@@ -4,26 +4,23 @@
         var(i); var(x); var(y); var(z);
         var(p); var(q);
 
-        rel(pointsTo, Object, Object);
-        rel(pointsToIndirectly, Object, Object); // transitive-reflexive closure of pointsTo
-
-        pointsTo(p, x) <<= hasValue(p, x);
-
-        pointsTo(x, y) <<= instrAlloca(x, y);
-
         // p = *q
-        pointsTo(p, y) <<= instrLoad(p, q) & pointsTo(q, x) & pointsTo(x, y);
+        pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y);
 
         // *p = q
-        pointsTo(y, x) <<= instrStore(i, q, p) & pointsTo(q, x) & pointsTo(p, y);
+        pointsTo(y, x) <<= store(q, p) & pointsTo(q, x) & pointsTo(p, y);
 
-        // (similar to) p = q
-        pointsTo(p, x) <<= instrGetelementptr(p, q) & pointsTo(q, x);
+        // p = q
+        pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x);
 
-        // reflexive-transitive closure
-        pointsToIndirectly(x, x) <<= object(x);
-        pointsToIndirectly(x, y) <<= pointsTo(x, y);
-        pointsToIndirectly(x, z) <<= pointsTo(x, y) & pointsTo(y, z);
+        // translating instructions to abstract operations
+        load(p, q) <<= instrLoad(p, q);
+        store(p, q) <<= instrStore(i, p, q);
+        pointsTo(p, x) <<= instrAlloca(p, x);
+        copy(p, q) <<= instrGetelementptr(p, q);
+        copy(p, q) <<= instrBitCast(p, q);
+        copy(p, ANY_OBJECT) <<= instrIntToPtr(p, _);
+        copy(p, q) <<= instrPHI(p) & hasOperand(p, q);
 
         // ANY_OBJECT points to anything
         pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
