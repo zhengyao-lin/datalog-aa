@@ -8,7 +8,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "DatalogIR.h"
-#include "Analysis/Specifications/Common.datalog"
+#include "Analysis/Specs/Common.datalog"
 
 /**
  * FactGenerator manages the mapping between values and
@@ -33,7 +33,7 @@ class FactGenerator {
 
     #define IN_DSL
 
-    #include "Analysis/Specifications/Relations.datalog"
+    #include "Analysis/Specs/Relations.datalog"
 
     #undef sort
     #undef rel

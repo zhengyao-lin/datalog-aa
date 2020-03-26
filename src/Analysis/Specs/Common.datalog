@@ -2,12 +2,8 @@
 #ifndef _COMMON_DATALOG_
 #define _COMMON_DATALOG_
 
-enum {
-    // ANY_OBJECT can contain
-    // pointers to ANY memory location
-    ANY_OBJECT = 0,
-    NUM_SPECIAL_OBJECTS
-};
+#define ANY_OBJECT 0
+#define NUM_SPECIAL_OBJECTS 1
 
 #endif // #ifndef _COMMON_DATALOG_
 #endif // #ifndef IN_DSL
