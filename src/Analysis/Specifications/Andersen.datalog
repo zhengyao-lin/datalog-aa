@@ -7,17 +7,13 @@
         var(f);                 // for functions
         var(c); var(d);         // for constants
 
-        // ANY_OBJECT points to anything
+        // main axioms
         pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
-
-        // p = *q
-        pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y);
-
-        // *p = q
-        pointsTo(y, x) <<= store(q, p) & pointsTo(q, x) & pointsTo(p, y);
-
-        // p = q
-        pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x);
+        pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y); // p = *q
+        pointsTo(y, x) <<= store(q, p) & pointsTo(q, x) & pointsTo(p, y); // *p = q
+        pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x) & pointer(p); // p = q
+        // NOTE ^: we only care about objects with pointer types
+        // OR aggregated objects containing a pointer object
 
         // global variables
         copy(x, c) <<= global(p)
@@ -52,16 +48,13 @@
                      & instrRet(j, x);
         
         // unknown instructions can do anything to its operands
-        pointsTo(i, x) <<= instrUnknown(i)
-                         & object(x)
-                         & !nonaddressable(x);
+        copy(i, ANY_OBJECT) <<= instrUnknown(i);
 
-        pointsTo(y, z) <<= instrUnknown(i)
-                         & hasOperand(i, x)
-                         & pointsToIndirectly(x, y)
-                         & object(z)
-                         & !immutable(y)
-                         & !nonaddressable(z);
-        // TODO: unknown instruction can potentially change all globals
+        copy(y, ANY_OBJECT) <<= instrUnknown(i)
+                              & hasOperand(i, x)
+                              & pointsToIndirectly(x, y)
+                              & !immutable(y);
+
+        // TODO: unknown instruction can potentially change all (non-private) globals
     }
 #endif // #ifdef IN_DSL

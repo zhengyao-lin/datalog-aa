@@ -61,7 +61,11 @@ void FactGenerator::initObjectIDForBasicBlock(const BasicBlock &block) {
         addValue(&instr, getAffiliatedObjectCountForInstruction(instr));
 
         for (const Use &operand: instr.operands()) {
-            addValue(operand);
+            if (auto *constant = dyn_cast<Constant>(operand)) {
+                initObjectIDForConstant(*constant);
+            } else {
+                addValue(operand);
+            }
         }
     }
 }
@@ -85,6 +89,18 @@ unsigned int FactGenerator::getAffiliatedObjectCountForInstruction(const llvm::I
     }
 }
 
+bool FactGenerator::containPointer(const Type *type) {
+    if (type->isPointerTy()) return true;
+
+    for (const Type *subtype: type->subtypes()) {
+        if (containPointer(subtype)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * For the first stage, we will limit ourselves to
  * modules with the following requirements:
@@ -96,6 +112,14 @@ unsigned int FactGenerator::getAffiliatedObjectCountForInstruction(const llvm::I
 
 void FactGenerator::generateFactsForModule(StandardDatalog::Program &program, const Module &unit) {
     initializedConstants.clear();
+
+    // annotate all pointer objects
+    for (const Value *value: valueList) {
+        if (value && containPointer(value->getType())) {
+            unsigned int value_id = getObjectIDOfValue(value);
+            program.addFormula(rel_pointer(value_id));
+        }
+    }
 
     // similar to alloca, a global variable has two objects associated with it
     // the variable itself, which points to the actual mem object
@@ -200,6 +224,20 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             unsigned int mem_id = getAffiliatedObjectID(instr_id, 1);
             program.addFormula(rel_mem(mem_id));
             program.addFormula(rel_instrAlloca(instr_id, mem_id));
+
+            auto *alloca_inst = dyn_cast<AllocaInst>(&user);
+            
+            // this was not annotated by the previous round
+            if (containPointer(alloca_inst->getAllocatedType())) {
+                program.addFormula(rel_pointer(mem_id));
+            }
+
+            // if the allocated type is a pointer, assume it
+            // doesn't point to anything in the beginning since it
+            // would be an undefined behaviour to read it otherwise
+
+            // TODO: check if this is true
+
             break;
         }
 
@@ -242,6 +280,9 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             break;
         }
 
+        // this is the ONLY place where we can
+        // get a pointer out of an integer
+        // (even calling memcpy would require us to convert first)
         case Instruction::IntToPtr: {
             // TODO: being most conservative right now and assume
             // this can point to anything
@@ -263,6 +304,7 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
         }
 
         // TODO: case Instruction::Invoke:
+        // TODO: calls to function pointers
 
         // this way of checking if a function has definition or not
         // comes from https://github.com/grievejia/andersen/blob/master/lib/ConstraintCollect.cpp#L351
@@ -334,6 +376,10 @@ void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &pro
 
     if (global.isConstant()) {
         program.addFormula(rel_immutable(global_mem_id));
+    }
+
+    if (containPointer(global.getValueType())) {
+        program.addFormula(rel_pointer(global_mem_id));
     }
 
     // a few properties to consider

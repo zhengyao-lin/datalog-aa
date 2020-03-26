@@ -22,11 +22,20 @@ enum {
     object(x) <<= block(x);
     object(x) <<= instr(x);
     object(x) <<= mem(x);
+    object(x) <<= pointer(x);
     object(x) <<= constant(x);
     object(x) <<= undef(x);
     object(x) <<= null(x);
+
     constant(x) <<= undef(x);
     constant(x) <<= null(x);
+
+    pointer(x) <<= global(x);
+    pointer(x) <<= function(x);
+    pointer(x) <<= null(x);
+
+    // no memory object for constant
+    nonaddressable(x) <<= constant(x);
 
     // infer some types
     function(x) <<= hasArgument(x, _);

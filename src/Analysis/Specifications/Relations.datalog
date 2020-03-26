@@ -22,6 +22,7 @@
     rel(block, Object); /* basic block */
     rel(instr, Object);
     rel(mem, Object); /* unamed memory object e.g. result of alloca */
+    rel(pointer, Object); /* NOTE that pointer relation indicates an object that could potentially contain a pointer */
     rel(constant, Object);
     rel(undef, Object);
     rel(null, Object);

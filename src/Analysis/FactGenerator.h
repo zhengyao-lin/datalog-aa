@@ -111,6 +111,8 @@ private:
         return addValue(value, 0);
     }
 
+    bool containPointer(const llvm::Type *type);
+
     void generateFactsForModule(StandardDatalog::Program &program, const llvm::Module &unit);
     void generateFactsForFunction(StandardDatalog::Program &program, const llvm::Function &function);
     void generateFactsForBasicBlock(StandardDatalog::Program &program, const llvm::BasicBlock &block);

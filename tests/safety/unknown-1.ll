@@ -14,7 +14,7 @@
 ; CHECK-DAG: @main::%result -> @main::%a::aff(1)
 ; CHECK-DAG: @main::%result -> @main::%b::aff(1)
 
-declare i32 @0()
+declare i32* @0()
 
 define i32 @main() {
 entry:
@@ -24,7 +24,7 @@ entry:
     store i32* %a, i32** %b
     %c = load i32*, i32** %b
 
-    %result = call i32 @0()
+    %result = call i32* @0()
 
     ret i32 0
 }

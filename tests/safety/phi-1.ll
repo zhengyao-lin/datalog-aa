@@ -1,9 +1,12 @@
 ; RUN: %opt -S -datalog-aa -datalog-aa-print-pts-to < %s 2>&1 | FileCheck %s
 
+declare i1 @unknown()
+
 define i32 @main() {
 entry:
     %a = alloca i32
-    br label %end
+    %i = call i1 @unknown()
+    br i1 %i, label %second, label %end
 
 second:
     %b = alloca i32
