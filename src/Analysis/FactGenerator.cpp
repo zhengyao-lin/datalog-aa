@@ -54,6 +54,7 @@ void FactGenerator::initObjectIDForFunction(const Function &function) {
 }
 
 void FactGenerator::initObjectIDForBasicBlock(const BasicBlock &block) {
+    // TODO: should we consider basic block objects
     addValue(&block);
 
     for (const Instruction &instr: block) {
@@ -187,7 +188,9 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
         if (auto *constant = dyn_cast<Constant>(operand)) {
             generateFactsForConstant(program, *constant);
         } else {
-            assert((isa<BasicBlock>(operand) || isa<Instruction>(operand)) &&
+            assert((isa<Argument>(operand) ||
+                    isa<BasicBlock>(operand) ||
+                    isa<Instruction>(operand)) &&
                    "unexpected type of operand");
         }
     }
@@ -259,7 +262,49 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             break;
         }
 
+        // TODO: case Instruction::Invoke:
+
+        // this way of checking if a function has definition or not
+        // comes from https://github.com/grievejia/andersen/blob/master/lib/ConstraintCollect.cpp#L351
+        case Instruction::Call: {
+            const CallInst *call = dyn_cast<CallInst>(&user);
+            assert(call && "not a call instruction");
+
+            const Function *function = call->getCalledFunction();
+            
+            unsigned int call_id = getObjectIDOfValue(call);
+            unsigned int function_id = getObjectIDOfValue(function);
+
+            if (function->isDeclaration() || function->isIntrinsic()) {
+                // TODO: handle external library calls and intrinsic calls
+                // e.g. malloc, realloc, etc.
+                goto UNKNOWN_INSTR;
+            } else {
+                // defined in this module
+                unsigned int i = 0;
+
+                program.addFormula(rel_instrCall(call_id, function_id));
+
+                for (const Argument &arg: function->args()) {
+                    assert(i < call->getNumArgOperands() &&
+                           "number of arguments does not match the number of formal arguments");
+
+                    const Value *call_arg = call->getArgOperand(i);
+                    
+                    unsigned int arg_id = getObjectIDOfValue(&arg);
+                    unsigned int call_arg_id = getObjectIDOfValue(call_arg);
+
+                    program.addFormula(rel_hasCallArgument(call_id, call_arg_id, arg_id));
+
+                    i++;
+                }
+            }
+
+            break;
+        };
+
         default:
+        UNKNOWN_INSTR:
             program.addFormula(rel_instrUnknown(instr_id));
             dbgs() << "unsupported instruction ";
             user.print(dbgs());
@@ -271,11 +316,25 @@ void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &pro
     unsigned int global_id = getObjectIDOfValue(&global);
     unsigned int global_mem_id = getAffiliatedObjectID(global_id, 1);
 
+    // NOTE that we need to distinguish two cases
+    //   - a pointer potentially pointing to any object
+    //   - a pointer (e.g. global) pointing to a unknown object
+    //     which, in turn, can point to anything
+    // in this case, global_var_id points to a (persumably)
+    // unique location, but we just don't know its content
+
     program.addFormula(rel_global(global_id));
 
     // the pointer to a global variable is immutable
     program.addFormula(rel_immutable(global_id));
     program.addFormula(rel_nonaddressable(global_id));
+
+    program.addFormula(rel_mem(global_mem_id));
+    program.addFormula(rel_pointsTo(global_id, global_mem_id));
+
+    if (global.isConstant()) {
+        program.addFormula(rel_immutable(global_mem_id));
+    }
 
     // a few properties to consider
     //   1. constant (immutable)
@@ -285,36 +344,11 @@ void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &pro
     if (global.hasInitializer()) {
         const Constant *initializer = global.getInitializer();
         unsigned int initializer_id = getObjectIDOfValue(initializer);
-
-        // NOTE if the variable is constant
-        // then the compiler is free to use the same
-        // space for multiple constants so to be conservative
-        // we need to point to the same location
-        //
-        // otherwise, each (non-external) global variable would have their
-        // own memory location (global_mem_id)
-        if (global.isConstant()) {
-            program.addFormula(rel_pointsTo(global_id, initializer_id));
-        } else {
-            program.addFormula(rel_mem(global_mem_id));
-            program.addFormula(rel_pointsTo(global_id, global_mem_id));
-            program.addFormula(rel_copy(global_mem_id, initializer_id));
-        }
-
         generateFactsForConstant(program, *initializer);
+
+        program.addFormula(rel_hasInitializer(global_id, initializer_id));
     } else {
-        // NOTE that we need to distinguish two cases
-        //   - a pointer potentially pointing to any object
-        //   - a pointer (e.g. global) pointing to a unknown object
-        //     which, in turn, can point to anything
-        // in this case, global_var_id points to a (persumably)
-        // unique location, but we just don't know its content
-
-        dbgs() << "global ";
-        global.print(dbgs());
-        dbgs() << " has no initializer\n";
-
-        program.addFormula(rel_pointsTo(global_id, ANY_OBJECT));
+        program.addFormula(rel_hasNoInitializer(global_id));
     }
 }
 
@@ -327,11 +361,10 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
 
     unsigned int constant_id = getObjectIDOfValue(&constant);
 
-    program.addFormula(rel_immutable(constant_id));
-
     // to be conservative, assume same constants
     // implies same memory location
-    program.addFormula(rel_mem(constant_id));
+    program.addFormula(rel_constant(constant_id));
+    program.addFormula(rel_immutable(constant_id));
 
     for (const Use &operand: constant.operands()) {
         auto *constant = dyn_cast<Constant>(operand);
@@ -343,7 +376,7 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
         // aggregate and all of its fields are alias of each other
         for (const Use &operand: constant.operands()) {
             auto operand_id = getObjectIDOfValue(operand);
-            program.addFormula(rel_copy(constant_id, operand_id));
+            program.addFormula(rel_hasConstantField(constant_id, operand_id));
         }
 
     } else if (auto *expr = dyn_cast<ConstantExpr>(&constant)) {
@@ -357,9 +390,10 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
 
         if (data->getType()->isPointerTy()) {
             if (isa<UndefValue>(data)) {
-                program.addFormula(rel_copy(constant_id, ANY_OBJECT));
+                program.addFormula(rel_undef(constant_id));
             } else if (isa<ConstantPointerNull>(data)) {
                 // simply use the mem object allocated above
+                program.addFormula(rel_null(constant_id));
             }
         }
     } else {

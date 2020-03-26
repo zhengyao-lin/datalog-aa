@@ -1,8 +1,14 @@
 #ifdef IN_DSL
     #include "Common.datalog"
     {
-        var(i); var(x); var(y); var(z);
-        var(p); var(q);
+        var(i); var(j);         // for instructions
+        var(x); var(y); var(z); // for values/pointers
+        var(p); var(q);         // for pointers
+        var(f);                 // for functions
+        var(c); var(d);         // for constants
+
+        // ANY_OBJECT points to anything
+        pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
 
         // p = *q
         pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y);
@@ -13,6 +19,21 @@
         // p = q
         pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x);
 
+        // global variables
+        copy(x, c) <<= global(p)
+                     & pointsTo(p, x)
+                     & hasInitializer(p, c);
+
+        // if a global has no initializer,
+        // it could point to anything
+        copy(x, ANY_OBJECT) <<= global(p)
+                              & pointsTo(p, x)
+                              & hasNoInitializer(p);
+
+        // constants
+        copy(c, d) <<= hasConstantField(c, d);
+        copy(c, ANY_OBJECT) <<= undef(c);
+
         // translating instructions to abstract operations
         load(p, q) <<= instrLoad(p, q);
         store(p, q) <<= instrStore(i, p, q);
@@ -22,8 +43,13 @@
         copy(p, ANY_OBJECT) <<= instrIntToPtr(p, _);
         copy(p, q) <<= instrPHI(p) & hasOperand(p, q);
 
-        // ANY_OBJECT points to anything
-        pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
+        // call instruction
+        copy(y, x) <<= instrCall(i, f) & hasCallArgument(i, x, y);
+
+        // call instruction return value
+        copy(i, x) <<= instrCall(i, f)
+                     & hasInstr(f, j)
+                     & instrRet(j, x);
         
         // unknown instructions can do anything to its operands
         pointsTo(i, x) <<= instrUnknown(i)

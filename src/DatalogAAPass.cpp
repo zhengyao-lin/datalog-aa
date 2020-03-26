@@ -32,9 +32,9 @@ DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
 
     fact_generator.generateFacts(program);
     
-    // dbgs() << "================== program\n";
-    // dbgs() << program << "\n";
-    // dbgs() << "================== program\n";
+    dbgs() << "================== program\n";
+    dbgs() << program << "\n";
+    dbgs() << "================== program\n";
 
     backend.load(program);
 

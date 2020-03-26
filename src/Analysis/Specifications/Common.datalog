@@ -22,6 +22,11 @@ enum {
     object(x) <<= block(x);
     object(x) <<= instr(x);
     object(x) <<= mem(x);
+    object(x) <<= constant(x);
+    object(x) <<= undef(x);
+    object(x) <<= null(x);
+    constant(x) <<= undef(x);
+    constant(x) <<= null(x);
 
     // infer some types
     function(x) <<= hasArgument(x, _);
@@ -29,6 +34,10 @@ enum {
     instr(x) <<= hasInstr(_, x);
     function(x) <<= hasBlock(x, _);
     block(x) <<= hasBlock(_, x);
+    constant(x) <<= hasConstantField(x, _);
+    constant(x) <<= hasConstantField(_, x);
+    global(x) <<= hasInitializer(x, _);
+    constant(x) <<= hasInitializer(_, x);
 
     // reflexive-transitive closure
     pointsToIndirectly(x, x) <<= object(x);

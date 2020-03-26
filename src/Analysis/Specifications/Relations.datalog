@@ -22,6 +22,9 @@
     rel(block, Object); /* basic block */
     rel(instr, Object);
     rel(mem, Object); /* unamed memory object e.g. result of alloca */
+    rel(constant, Object);
+    rel(undef, Object);
+    rel(null, Object);
 
     /* properties */
     rel(immutable, Object);
@@ -32,6 +35,10 @@
     rel(hasBlock, Object /* function */, Object);
     rel(hasInstr, Object /* function object */, Object /* instruction object */);
     rel(hasOperand, Object /* instruction object */, Object /* operand */);
+    rel(hasCallArgument, Object /* call instruction */, Object /* call arg */, Object /* formal arg */);
+    rel(hasConstantField, Object /* constant */, Object /* constant */);
+    rel(hasInitializer, Object /* global */, Object /* constant */);
+    rel(hasNoInitializer, Object /* global */);
 
     /* abstract operations (note the order of operands) */
     rel(pointsTo, Object, Object);
@@ -49,5 +56,6 @@
     rel(instrIntToPtr, Object, Object);
     rel(instrPHI, Object);
     rel(instrRet, Object, Object);
+    rel(instrCall, Object, Object /* function object */);
     rel(instrUnknown, Object);
 #endif // #ifdef IN_DSL

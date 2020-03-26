@@ -1,15 +1,15 @@
 ; RUN: %opt -S -datalog-aa -datalog-aa-print-pts-to < %s 2>&1 | FileCheck %s
 
-; Allocations are assigned correctly
+; allocations are assigned correctly
 ; CHECK-DAG: @main -> @main::aff(1)
 ; CHECK-DAG: @main::%a -> @main::%a::aff(1)
 ; CHECK-DAG: @main::%b -> @main::%b::aff(1)
 
-; Correct analysis for the simple pointer manipulations
+; correct analysis for the simple pointer manipulations
 ; CHECK-DAG: @main::%b::aff(1) -> @main::%a::aff(1)
 ; CHECK-DAG: @main::%c -> @main::%a::aff(1)
 
-; External functions can behave arbitrarily
+; external functions can behave arbitrarily
 ; CHECK-DAG: @main::%result -> @main::aff(1)
 ; CHECK-DAG: @main::%result -> @main::%a::aff(1)
 ; CHECK-DAG: @main::%result -> @main::%b::aff(1)
