@@ -1,4 +1,4 @@
-; RUN: %opt -S -datalog-aa -datalog-aa-print-pts-to < %s 2>&1 | FileCheck %s
+; RUN: %opt -S < %s 2>&1 | FileCheck %s
 
 ; declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i1)
 declare void @unknown(i8*, i8*)

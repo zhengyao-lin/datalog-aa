@@ -9,6 +9,7 @@ set_target_properties(DatalogAA PROPERTIES PREFIX "")
 target_include_directories(DatalogAA PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 # TODO: fix this
+# target_link_libraries(DatalogAA PRIVATE LLVMCore)
 # target_link_libraries(DatalogAA PRIVATE LLVMSupport)
 
 # link z3

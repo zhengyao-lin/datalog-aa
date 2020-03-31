@@ -1,4 +1,4 @@
-; RUN: %opt -S -datalog-aa -datalog-aa-print-pts-to < %s 2>&1 | FileCheck %s
+; RUN: %opt -S < %s 2>&1 | FileCheck %s
 
 @str.1 = constant [14 x i8] c"string object\00"
 @str.1.p = global i8* getelementptr inbounds ([14 x i8], [14 x i8]* @str.1, i32 0, i32 0)
@@ -22,3 +22,8 @@
 ; CHECK-DAG: @struct.2 -> @struct.2::aff(1)
 ; CHECK-DAG: @struct.2::aff(1) -> @struct.1::aff(1)
 ; CHECK-DAG: @struct.2::aff(1) -> @str.1.p::aff(1)
+
+define i32 @main() {
+entry:
+    ret i32 0
+}

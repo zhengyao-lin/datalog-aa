@@ -6,7 +6,7 @@
 
 #include "DatalogIR.h"
 
-class Z3Backend: public StandardDatalog::Engine {
+class Z3Backend: public StandardDatalog::Backend {
     std::unique_ptr<z3::context> context;
     std::unique_ptr<z3::fixedpoint> fixedpoint;
     StandardDatalog::Program program;
@@ -15,9 +15,13 @@ class Z3Backend: public StandardDatalog::Engine {
     std::map<std::string, z3::func_decl> relation_table;
 
     unsigned int var_counter;
-
 public:
+    virtual ~Z3Backend() {
+        Z3_finalize_memory();
+    }
+
     virtual void load(const StandardDatalog::Program &program) override;
+    virtual bool query(const StandardDatalog::Formula &formula) override;
     virtual std::vector<StandardDatalog::Formula> query(const std::string &relation_name) override;
 
 private:

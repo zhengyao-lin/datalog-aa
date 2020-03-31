@@ -27,9 +27,9 @@ class FactGenerator {
     std::set<const llvm::Constant *> initializedConstants;
 
     // relations required in the program
-    #define sort(name, size) std::string name = #name;
+    #define sort(name, size) private: std::string name = #name;
     #define rel(name, ...) \
-        StandardDatalog::Relation rel_##name = StandardDatalog::Relation(#name, __VA_ARGS__)
+        public: StandardDatalog::Relation rel_##name = StandardDatalog::Relation(#name, __VA_ARGS__)
 
     #define IN_DSL
 
@@ -48,9 +48,12 @@ public:
         return id - NUM_SPECIAL_OBJECTS < valueList.size();
     }
 
+    bool hasValue(const llvm::Value *value) {
+        return valueToObjectID.find(value) != valueToObjectID.end();
+    }
+
     unsigned int getObjectIDOfValue(const llvm::Value *value) {
-        assert(valueToObjectID.find(value) != valueToObjectID.end() &&
-               "value does not exist");
+        assert(hasValue(value) && "value does not exist");
         return valueToObjectID.at(value);
     }
 

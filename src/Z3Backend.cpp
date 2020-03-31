@@ -190,6 +190,24 @@ void Z3Backend::collectVariablesInTerm(std::map<std::string, z3::expr> &var_tabl
     }
 }
 
+bool Z3Backend::query(const StandardDatalog::Formula &formula) {
+    // TODO: need to make sure that the formula has no variable
+
+    z3::expr query_expr = emitFormula(formula);
+
+    // TODO: this function seems to be leaking some memory
+    z3::check_result result = fixedpoint->query(query_expr);
+
+    if (result == z3::unknown) {
+        std::cerr << "z3 returned unknown: "
+                  << fixedpoint->reason_unknown()
+                  << std::endl;
+        assert(0);
+    }
+
+    return result == z3::sat;
+}
+
 StandardDatalog::FormulaVector Z3Backend::query(const std::string &relation_name) {
     assert(relation_table.find(relation_name) != relation_table.end() &&
            "relation does not exist");

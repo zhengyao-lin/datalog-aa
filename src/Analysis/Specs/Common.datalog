@@ -44,6 +44,9 @@
     global(x) <<= hasInitializer(x, _);
     constant(x) <<= hasInitializer(_, x);
 
+    // alias if two objects may points to the same thing
+    alias(x, y) <<= pointsTo(x, z) & pointsTo(y, z);
+
     // reflexive-transitive closure
     pointsToIndirectly(x, x) <<= object(x);
     pointsToIndirectly(x, y) <<= pointsTo(x, y);

@@ -43,6 +43,7 @@
 
     /* abstract operations (note the order of operands) */
     rel(pointsTo, Object, Object);
+    rel(alias, Object, Object);
     rel(pointsToIndirectly, Object, Object); // transitive-reflexive closure of pointsTo
     rel(copy, Object /* x */, Object /* y */); /* x = y */
     rel(load, Object /* x */, Object /* y */); /* x = *y */

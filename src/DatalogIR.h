@@ -229,10 +229,25 @@ public:
         bool isWellFormed() const;
     };
 
-    class Engine {
+    class Backend {
     public:
+        virtual ~Backend() {}
+
         virtual void load(const Program &program) = 0;
+
+        /**
+         * Check the truth of a specific formula
+         */
+        virtual bool query(const Formula &formula) = 0;
+
+        /**
+         * Dump an entire relation
+         */
         virtual FormulaVector query(const S &relation_name) = 0;
+
+        virtual FormulaVector query(const Relation &relation) {
+            return query(relation.getName());
+        }
     };
 
     /**
