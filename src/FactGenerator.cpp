@@ -83,6 +83,17 @@ void FactGenerator::initObjectIDForConstant(const Constant &constant) {
 }
 
 unsigned int FactGenerator::getAffiliatedObjectCountForInstruction(const llvm::Instruction &instr) {
+    // search for special cases for intrinsic function calls
+    if (auto *call_instr = dyn_cast<CallInst>(&instr)) {
+        for (auto *intrinsic: intrinsicList) {
+            IntrinsicCall::MatchResult result = intrinsic->match(call_instr);
+
+            if (result.matched) {
+                return result.affiliated;
+            }
+        }
+    }
+
     switch (instr.getOpcode()) {
         case Instruction::Alloca: return 1; // alloca creates a frame object
         default: return 0;
@@ -113,14 +124,6 @@ bool FactGenerator::containPointer(const Type *type) {
 void FactGenerator::generateFactsForModule(StandardDatalog::Program &program, const Module &unit) {
     initializedConstants.clear();
 
-    // annotate all pointer objects
-    for (const Value *value: valueList) {
-        if (value && containPointer(value->getType())) {
-            unsigned int value_id = getObjectIDOfValue(value);
-            program.addFormula(rel_pointer(value_id));
-        }
-    }
-
     // similar to alloca, a global variable has two objects associated with it
     // the variable itself, which points to the actual mem object
     for (const GlobalVariable &global: unit.globals()) {
@@ -142,7 +145,7 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
 
     program.addFormula(rel_function(function_id));
     program.addFormula(rel_mem(function_mem_id));
-    program.addFormula(rel_pointsTo(function_id, function_mem_id));
+    program.addFormula(rel_hasAllocatedMemory(function_id, function_mem_id));
 
     // both function pointer and function object are immutable
     program.addFormula(rel_immutable(function_id));
@@ -226,11 +229,6 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             program.addFormula(rel_instrAlloca(instr_id, mem_id));
 
             auto *alloca_inst = dyn_cast<AllocaInst>(&user);
-            
-            // this was not annotated by the previous round
-            if (containPointer(alloca_inst->getAllocatedType())) {
-                program.addFormula(rel_pointer(mem_id));
-            }
 
             // if the allocated type is a pointer, assume it
             // doesn't point to anything in the beginning since it
@@ -318,9 +316,19 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             unsigned int function_id = getObjectIDOfValue(function);
 
             if (function->isDeclaration() || function->isIntrinsic()) {
-                // TODO: handle external library calls and intrinsic calls
-                // e.g. malloc, realloc, etc.
-                goto UNKNOWN_INSTR;
+                bool matched = false;
+                
+                for (auto *intrinsic: intrinsicList) {
+                    if (intrinsic->match(call).matched) {
+                        // generate specific facts for intrinsic function calls
+                        intrinsic->generate(this, program, call);
+                        matched = true;
+                        break;
+                    }
+                }
+
+                if (!matched)
+                    goto UNKNOWN_INSTR;
             } else {
                 // defined in this module
                 unsigned int i = 0;
@@ -372,14 +380,10 @@ void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &pro
     program.addFormula(rel_nonaddressable(global_id));
 
     program.addFormula(rel_mem(global_mem_id));
-    program.addFormula(rel_pointsTo(global_id, global_mem_id));
+    program.addFormula(rel_hasAllocatedMemory(global_id, global_mem_id));
 
     if (global.isConstant()) {
         program.addFormula(rel_immutable(global_mem_id));
-    }
-
-    if (containPointer(global.getValueType())) {
-        program.addFormula(rel_pointer(global_mem_id));
     }
 
     // a few properties to consider
@@ -411,6 +415,7 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
     // implies same memory location
     program.addFormula(rel_constant(constant_id));
     program.addFormula(rel_immutable(constant_id));
+    program.addFormula(rel_nonaddressable(constant_id));
 
     for (const Use &operand: constant.operands()) {
         auto *constant = dyn_cast<Constant>(operand);
@@ -441,9 +446,73 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
                 // simply use the mem object allocated above
                 program.addFormula(rel_null(constant_id));
             }
+        } else {
+            // assumption: this will never point to anything
+            // program.addFormula(rel_nonpointer(constant_id));
         }
     } else {
         // TODO: missing support for basic block address
         assert(0 && "unsupported constant type");
     }
 }
+
+/**
+ * To add support for a new intrinsics, add a new class here inheriting IntrinsicCall
+ */
+
+struct MallocIntrinsicCall: IntrinsicCall {
+    virtual MatchResult match(const CallInst *call) override {
+        const Function *function = call->getCalledFunction();
+    
+        if (function->getName() == "malloc" &&
+            function->arg_size() == 1 &&
+            function->arg_begin()->getType()->isIntegerTy() &&
+            function->getReturnType()->isPointerTy()) {
+            return { true, 1 };
+        }
+
+        return { false };
+    }
+
+    virtual void generate(FactGenerator *fact_generator,
+                          StandardDatalog::Program &program,
+                          const llvm::CallInst *call) override {
+        unsigned int instr_id = fact_generator->getObjectIDOfValue(call);
+        unsigned int mem_id = fact_generator->getAffiliatedObjectID(instr_id, 1);
+        
+        program.addFormula(fact_generator->rel_mem(mem_id));
+        program.addFormula(fact_generator->rel_intrinsicMalloc(instr_id, mem_id));
+    }
+};
+
+struct MemcpyIntrinsicCall: IntrinsicCall {
+    virtual MatchResult match(const CallInst *call) override {
+        const Function *function = call->getCalledFunction();
+    
+        if ((function->getName().startswith("llvm.memcpy.") ||
+             function->getName().startswith("llvm.memmove.")) &&
+            function->arg_size() >= 2) {
+            return { true, 0 };
+        }
+
+        return { false };
+    }
+
+    virtual void generate(FactGenerator *fact_generator,
+                          StandardDatalog::Program &program,
+                          const llvm::CallInst *call) override {
+        unsigned int instr_id = fact_generator->getObjectIDOfValue(call);
+
+        assert(call->getNumArgOperands() >= 2);
+
+        unsigned int arg_dest_id = fact_generator->getObjectIDOfValue(call->getArgOperand(0));
+        unsigned int arg_src_id = fact_generator->getObjectIDOfValue(call->getArgOperand(1));
+
+        program.addFormula(fact_generator->rel_intrinsicMemcpy(instr_id, arg_dest_id, arg_src_id));
+    }
+};
+
+std::vector<IntrinsicCall *> FactGenerator::intrinsicList = {
+    new MallocIntrinsicCall(),
+    new MemcpyIntrinsicCall()
+};

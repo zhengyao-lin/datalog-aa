@@ -1,0 +1,11 @@
+/**
+ * Some common variable names
+ */
+
+#ifdef IN_DSL
+    var(i); var(j);         // for instructions
+    var(x); var(y); var(z); // for values/pointers
+    var(p); var(q);         // for pointers
+    var(f);                 // for functions
+    var(c); var(d);         // for constants
+#endif // #ifdef IN_DSL

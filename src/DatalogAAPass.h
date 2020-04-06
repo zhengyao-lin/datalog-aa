@@ -7,7 +7,7 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Pass.h"
 
-#include "Analysis/FactGenerator.h"
+#include "FactGenerator.h"
 
 class DatalogAAResult: public llvm::AAResultBase<DatalogAAResult> {
 public:

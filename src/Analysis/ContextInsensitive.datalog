@@ -1,0 +1,19 @@
+/**
+ * Relations and axioms for context-insensitive analysis
+ */
+
+#ifdef IN_DSL
+    #include "Objects.datalog"
+
+    rel(pointsTo, Object, Object);
+    rel(alias, Object, Object);
+    rel(pointsToIndirectly, Object, Object); // transitive-reflexive closure of pointsTo
+
+    // alias if two objects may points to the same thing
+    alias(x, y) <<= pointsTo(x, z) & pointsTo(y, z);
+
+    // reflexive-transitive closure
+    pointsToIndirectly(x, x) <<= object(x);
+    pointsToIndirectly(x, y) <<= pointsTo(x, y);
+    pointsToIndirectly(x, z) <<= pointsTo(x, y) & pointsTo(y, z);
+#endif

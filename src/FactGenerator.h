@@ -8,13 +8,35 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "DatalogIR.h"
-#include "Analysis/Specs/Common.datalog"
+#include "Analysis/Objects.datalog"
+
+class FactGenerator;
+
+struct IntrinsicCall {
+    using MatchResult = struct {
+        bool matched;
+        unsigned int affiliated; // how many affiliated objects
+    };
+
+    virtual ~IntrinsicCall() {}
+
+    virtual MatchResult match(const llvm::CallInst *call) {
+        return { false };
+    }
+
+    virtual void generate(FactGenerator *fact_generator,
+                          StandardDatalog::Program &program,
+                          const llvm::CallInst *call) {}
+};
 
 /**
  * FactGenerator manages the mapping between values and
  * object index and generates facts used for analysis
  */
 class FactGenerator {
+    // sese Intrinsics.cpp for definition
+    static std::vector<IntrinsicCall *> intrinsicList;
+
     const llvm::Module *unit;
 
     // an ID that uniquely identifies an llvm::Value
@@ -27,16 +49,19 @@ class FactGenerator {
     std::set<const llvm::Constant *> initializedConstants;
 
     // relations required in the program
+    #define IN_DSL
     #define sort(name, size) private: std::string name = #name;
     #define rel(name, ...) \
         public: StandardDatalog::Relation rel_##name = StandardDatalog::Relation(#name, __VA_ARGS__)
-
-    #define IN_DSL
-
-    #include "Analysis/Specs/Relations.datalog"
-
-    #undef sort
+    #define var(...)
+    #define BODY(...) // ignore the program body
+    
+    #include "Analysis/Objects.datalog"
+    
+    #undef BODY
+    #undef var
     #undef rel
+    #undef sort
     #undef IN_DSL
 
 public:

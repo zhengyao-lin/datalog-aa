@@ -43,7 +43,7 @@ DatalogAAResult::analysis_map = {
     {
         DatalogAAResult::Andersen,
         BEGIN
-            #include "Analysis/Specs/Andersen.datalog"
+            #include "Analysis/Andersen.datalog"
         END
     }
 };
@@ -75,12 +75,12 @@ DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
     }
 
     // fetch points to relation
-    StandardDatalog::FormulaVector points_to = backend->query(fact_generator.rel_pointsTo);
+    StandardDatalog::FormulaVector points_to = backend->query("pointsTo");
     DatalogAAResult::ConcreteBinaryRelation<unsigned int> concrete_points_to = getConcreteRelation(points_to);
     points_to_relation.swap(concrete_points_to);
 
     // fetch alias relation
-    StandardDatalog::FormulaVector alias = backend->query(fact_generator.rel_alias);
+    StandardDatalog::FormulaVector alias = backend->query("alias");
     DatalogAAResult::ConcreteBinaryRelation<unsigned int> concrete_alias = getConcreteRelation(alias);
     alias_relation.swap(concrete_alias);
 

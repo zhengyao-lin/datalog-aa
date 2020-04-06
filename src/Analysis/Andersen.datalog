@@ -1,0 +1,73 @@
+#ifdef IN_DSL
+    #include "ContextInsensitive.datalog"
+
+    rel(copy, Object /* x */, Object /* y */); /* x = y */
+    rel(load, Object /* x */, Object /* y */); /* x = *y */
+    rel(store, Object /* y */, Object /* x */); /* *x = y */
+
+    // main axioms
+    pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
+    pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y); // p = *q
+    pointsTo(y, x) <<= store(q, p) & pointsTo(q, x) & pointsTo(p, y); // *p = q
+    pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x) & !nonpointer(p); // p = q
+    // NOTE ^: we only care about objects with pointer types
+    // OR aggregated objects containing a pointer object
+
+    // copy is reflexive and transitive
+    // but NOT symmetric
+    copy(x, x) <<= object(x);
+    copy(x, z) <<= copy(x, y) & copy(y, z);
+
+    // global variables
+    copy(x, c) <<= global(p)
+                 & pointsTo(p, x)
+                 & hasInitializer(p, c);
+
+    // if a global has no initializer,
+    // it could point to anything
+    copy(x, ANY_OBJECT) <<= global(p)
+                        & pointsTo(p, x)
+                        & hasNoInitializer(p);
+
+    // constants
+    copy(c, d) <<= hasConstantField(c, d);
+    copy(c, ANY_OBJECT) <<= undef(c);
+
+    // implicit points-to relation
+    pointsTo(x, y) <<= hasAllocatedMemory(x, y);
+
+    // translating instructions to abstract operations
+    load(p, q) <<= instrLoad(p, q);
+    store(p, q) <<= instrStore(i, p, q);
+    pointsTo(p, x) <<= instrAlloca(p, x);
+    copy(p, q) <<= instrGetelementptr(p, q);
+    copy(p, ANY_OBJECT) <<= instrIntToPtr(p, _);
+    copy(p, q) <<= instrPHI(p) & hasOperand(p, q);
+
+    copy(p, q) <<= instrBitCast(p, q);
+
+    // call instruction
+    copy(y, x) <<= instrCall(i, f) & hasCallArgument(i, x, y);
+
+    // call instruction return value
+    copy(i, x) <<= instrCall(i, f)
+                & hasInstr(f, j)
+                & instrRet(j, x);
+    
+    // unknown instructions can do anything to its operands
+    copy(i, ANY_OBJECT) <<= instrUnknown(i);
+
+    copy(y, ANY_OBJECT) <<= instrUnknown(i)
+                        & hasOperand(i, x)
+                        & pointsToIndirectly(x, y)
+                        & !immutable(y);
+
+    // TODO: unknown instruction can potentially change all (non-private) globals
+
+    // intrinsics
+    pointsTo(p, x) <<= intrinsicMalloc(p, x);
+    copy(x, y) <<= intrinsicMemcpy(i, p, q)
+                 & pointsTo(p, x)
+                 & pointsTo(q, y);
+
+#endif // #ifdef IN_DSL

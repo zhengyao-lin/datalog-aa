@@ -1,0 +1,137 @@
+/**
+ * This file describes the object abstraction for all of our analysis
+ * This serves as:
+ *   1. a common header to all datalog dsls
+ *   2. a template to initialize "global" relations in FactGenerator.h
+ *   3. base program for all analysis
+ */
+
+#ifndef _COMMON_DATALOG_
+#define _COMMON_DATALOG_
+#define ANY_OBJECT 0
+#define NUM_SPECIAL_OBJECTS 1
+#endif
+
+#ifndef BODY
+    // BODY acts as a switch to potentially omit the body
+    #define BODY(...) __VA_ARGS__
+#endif
+
+#ifdef IN_DSL
+    #include "Variables.datalog"
+
+    /**
+     * Examples of objects:
+     *   - a global
+     *   - a function (pointer)
+     *   - result of instrAlloca
+     *   - the actual memory object of instrAlloca
+     */
+
+    sort(Object, 65535);
+
+    /* types */
+    rel(object, Object);
+    rel(global, Object);
+    rel(function, Object);
+    rel(block, Object); /* basic block */
+    rel(instr, Object);
+    rel(mem, Object); /* unamed memory object e.g. result of alloca */
+    rel(constant, Object);
+    rel(undef, Object);
+    rel(null, Object);
+    rel(nonpointer, Object); /* object that will DEFINITELY not be pointing to anything */
+
+    /* intrinsic functions (including specific library calls) */
+    rel(intrinsic, Object);
+
+    /* properties */
+    rel(immutable, Object);
+    rel(nonaddressable, Object);
+
+    /* element relations */
+    rel(hasAllocatedMemory, Object /* function */, Object /* mem */);
+    rel(hasArgument, Object /* function */, Object /* argument */);
+    rel(hasBlock, Object /* function */, Object);
+    rel(hasInstr, Object /* function object */, Object /* instruction object */);
+    rel(hasOperand, Object /* instruction object */, Object /* operand */);
+    rel(hasCallArgument, Object /* call instruction */, Object /* call arg */, Object /* formal arg */);
+    rel(hasConstantField, Object /* constant */, Object /* constant */);
+    rel(hasInitializer, Object /* global */, Object /* constant */);
+    rel(hasNoInitializer, Object /* global */);
+
+    /* instructions */
+    rel(instrAlloca, Object /* instruction object */, Object /* memory object */);
+    rel(instrGetelementptr, Object, Object);
+    rel(instrLoad, Object /* load result/instruction */, Object /* pointer object to load */);
+    rel(instrStore, Object, Object /* value */, Object /* pointer */);
+    rel(instrBitCast, Object, Object);
+    rel(instrIntToPtr, Object, Object);
+    rel(instrPHI, Object);
+    rel(instrRet, Object, Object);
+    rel(instrCall, Object, Object /* function object */);
+    rel(instrUnknown, Object);
+
+    /* supported intrinsics */
+    /* intrinsics are similar to instructions. e.g. a call to malloc will be replaced by this relation */
+    rel(intrinsicMalloc, Object /* instr */, Object /* mem object */);
+    rel(intrinsicMemcpy, Object /* instr */, Object /* dest pointer */, Object /* src pointer */);
+
+    BODY(
+        object(x) <<= global(x);
+        object(x) <<= function(x);
+        object(x) <<= block(x);
+        object(x) <<= instr(x);
+        object(x) <<= mem(x);
+        object(x) <<= nonpointer(x);
+        object(x) <<= constant(x);
+        object(x) <<= undef(x);
+        object(x) <<= null(x);
+
+        function(f) <<= intrinsic(f);
+
+        constant(x) <<= undef(x);
+        constant(x) <<= null(x);
+
+        // infer some types
+        mem(x) <<= hasAllocatedMemory(_, x);
+        function(x) <<= hasArgument(x, _);
+        function(x) <<= hasInstr(x, _);
+        instr(x) <<= hasInstr(_, x);
+        function(x) <<= hasBlock(x, _);
+        block(x) <<= hasBlock(_, x);
+        constant(x) <<= hasConstantField(x, _);
+        constant(x) <<= hasConstantField(_, x);
+        global(x) <<= hasInitializer(x, _);
+        constant(x) <<= hasInitializer(_, x);
+
+        // instruction predicates
+
+        // instrAlloca(2) <-> 2 is an alloca instruction
+        instr(x) <<= instrAlloca(x, _); // instrAlloca is an instruction
+        hasOperand(x, y) <<= instrAlloca(x, y);
+
+        // at of now, getelementptr is simply a copy instruction
+        instr(x) <<= instrGetelementptr(x, _);
+        hasOperand(x, y) <<= instrGetelementptr(x, y);
+
+        instr(x) <<= instrLoad(x, _);
+        hasOperand(x, y) <<= instrLoad(x, y);
+
+        instr(x) <<= instrStore(x, _, _);
+        hasOperand(x, y) <<= instrStore(x, y, _);
+        hasOperand(x, y) <<= instrStore(x, _, y);
+
+        instr(x) <<= instrRet(x, _);
+        hasOperand(x, y) <<= instrRet(x, y);
+
+        /**
+         * The client should emit hasOperand relations
+         * unknown instruction can do whatever possible to
+         * its operands
+         */
+        instr(x) <<= instrUnknown(x);
+    )
+#endif // #ifdef IN_DSL
+
+#undef BODY
