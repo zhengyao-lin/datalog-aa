@@ -39,7 +39,7 @@ static cl::opt<DatalogAAResult::Algorithm> optionAlgorithm(
  * (currently only andersen's is supported)
  */
 std::map<DatalogAAResult::Algorithm, StandardDatalog::Program>
-DatalogAAResult::analysis_map = {
+DatalogAAResult::analysisMap = {
     {
         DatalogAAResult::Andersen,
         BEGIN
@@ -61,10 +61,10 @@ static RegisterPass<DatalogAAPass> X(
 );
 
 DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
-    unit(&unit), backend(new Z3Backend()), fact_generator(unit) {
-    StandardDatalog::Program program = analysis_map[optionAlgorithm.getValue()];
+    unit(&unit), backend(new Z3Backend()), factGenerator(unit) {
+    StandardDatalog::Program program = analysisMap[optionAlgorithm.getValue()];
 
-    fact_generator.generateFacts(program);
+    factGenerator.generateFacts(program);
 
     backend->load(program);
 
@@ -77,15 +77,20 @@ DatalogAAResult::DatalogAAResult(const llvm::Module &unit):
     // fetch points to relation
     StandardDatalog::FormulaVector points_to = backend->query("pointsTo");
     DatalogAAResult::ConcreteBinaryRelation<unsigned int> concrete_points_to = getConcreteRelation(points_to);
-    points_to_relation.swap(concrete_points_to);
+    pointsToRelation.swap(concrete_points_to);
 
     // fetch alias relation
     StandardDatalog::FormulaVector alias = backend->query("alias");
     DatalogAAResult::ConcreteBinaryRelation<unsigned int> concrete_alias = getConcreteRelation(alias);
-    alias_relation.swap(concrete_alias);
+    aliasRelation.swap(concrete_alias);
 
     if (optionPrintPointsTo.getValue()) {
         printPointsTo(dbgs());
+    }
+
+    // record points to set
+    for (auto pair: pointsToRelation) {
+        pointsToSet[pair.first].insert(pair.second);
     }
 }
 
@@ -93,28 +98,59 @@ AliasResult DatalogAAResult::alias(const MemoryLocation &location_a, const Memor
     const Value *val_a = location_a.Ptr;
     const Value *val_b = location_b.Ptr;
 
-    assert(fact_generator.hasValue(val_a) && "value does not exist");
-    assert(fact_generator.hasValue(val_b) && "value does not exist");
+    assert(factGenerator.hasValue(val_a) && "value does not exist");
+    assert(factGenerator.hasValue(val_b) && "value does not exist");
 
-    unsigned int val_a_id = fact_generator.getObjectIDOfValue(val_a);
-    unsigned int val_b_id = fact_generator.getObjectIDOfValue(val_b);
+    unsigned int val_a_id = factGenerator.getObjectIDOfValue(val_a);
+    unsigned int val_b_id = factGenerator.getObjectIDOfValue(val_b);
 
-    dbgs() << "querying alias: ";
-    val_a->print(dbgs());
-    dbgs() << " vs ";
-    val_b->print(dbgs());
-    dbgs() << "\n";
+    if (val_a_id == val_b_id) {
+        return MustAlias;
+    }
 
     // should we fallthrough to other analysis?
     std::pair<unsigned int, unsigned int> pair = std::make_pair(
         val_a_id, val_b_id
     );
 
-    if (alias_relation.find(pair) != alias_relation.end()) {
+    if (aliasRelation.find(pair) != aliasRelation.end()) {
         return MayAlias;
     } else {
         return NoAlias;
     }
+}
+
+bool DatalogAAResult::pointsToConstantMemory(const llvm::MemoryLocation &loc, bool or_local) {
+    const Value *val = loc.Ptr;
+
+    if (dyn_cast<Function>(val)) {
+        return true;
+    }
+
+    if (const GlobalVariable *var = dyn_cast<GlobalVariable>(val)) {
+        return var->isConstant();
+    }
+
+    assert(factGenerator.hasValue(val) && "value does not exist");
+    unsigned int val_id = factGenerator.getObjectIDOfValue(val);
+
+    const std::set<unsigned int> &pts_to_set = pointsToSet[val_id];
+
+    for (unsigned int pointee: pts_to_set) {
+        const Value *pointee_val = factGenerator.getMainValueOfAffiliatedObjectID(pointee);
+
+        if (const GlobalVariable *var = dyn_cast<GlobalVariable>(pointee_val)) {
+            if (!var->isConstant()) {
+                return false;
+            }
+        } else if (dyn_cast<Function>(pointee_val)) {
+            continue;
+        } else if (!or_local || !dyn_cast<AllocaInst>(pointee_val)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -142,7 +178,7 @@ DatalogAAResult::getConcreteRelation(const StandardDatalog::FormulaVector &relat
 void DatalogAAResult::printPointsTo(llvm::raw_ostream &os) {
     os << "================== all addressable objects\n";
 
-    for (auto pair: points_to_relation) {
+    for (auto pair: pointsToRelation) {
         unsigned int value_id = pair.second;
 
         if (pair.first == ANY_OBJECT) {
@@ -155,7 +191,7 @@ void DatalogAAResult::printPointsTo(llvm::raw_ostream &os) {
 
     os << "================== points-to relation\n";
 
-    for (auto pair: points_to_relation) {
+    for (auto pair: pointsToRelation) {
         unsigned int pointer_id = pair.first;
         unsigned int value_id = pair.second;
 
@@ -177,8 +213,8 @@ void DatalogAAResult::printObjectID(raw_ostream &os, unsigned int id) {
             case ANY_OBJECT: os << "any"; break;
             default: os << "special(" << id << ")";
         }
-    } else if (fact_generator.isValidObjectID(id)) {
-        const llvm::Value *value = fact_generator.getValueOfObjectID(id);
+    } else if (factGenerator.isValidObjectID(id)) {
+        const llvm::Value *value = factGenerator.getValueOfObjectID(id);
 
         if (value != NULL) {
             ValuePrinter::printUniqueName(os, value);
@@ -191,7 +227,7 @@ void DatalogAAResult::printObjectID(raw_ostream &os, unsigned int id) {
             do {
                 op++; id--;
 
-                const llvm::Value *value = fact_generator.getValueOfObjectID(id);
+                const llvm::Value *value = factGenerator.getValueOfObjectID(id);
 
                 if (value != NULL) {
                     ValuePrinter::printUniqueName(os, value);

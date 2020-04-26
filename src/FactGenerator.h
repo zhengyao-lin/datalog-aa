@@ -95,6 +95,20 @@ public:
         return base + idx;
     }
 
+    const llvm::Value *getMainValueOfAffiliatedObjectID(unsigned int id) {
+        unsigned int index = id - NUM_SPECIAL_OBJECTS;
+
+        assert(index < valueList.size() &&
+               "object id does not exist");
+
+        while (!valueList[index]) {
+            assert(index != 0 && "cannot find main object");
+            index--;
+        }
+
+        return valueList[index];
+    }
+
     // append all the facts to the given program
     void generateFacts(StandardDatalog::Program &program) {
         generateFactsForModule(program, *unit);
@@ -140,6 +154,8 @@ private:
     }
 
     bool containPointer(const llvm::Type *type);
+    
+    void generateFactsForValue(StandardDatalog::Program &program, const llvm::Value &value);
 
     void generateFactsForModule(StandardDatalog::Program &program, const llvm::Module &unit);
     void generateFactsForFunction(StandardDatalog::Program &program, const llvm::Function &function);

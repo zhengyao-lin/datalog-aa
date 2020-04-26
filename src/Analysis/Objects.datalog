@@ -89,6 +89,7 @@
         object(x) <<= null(x);
 
         function(f) <<= intrinsic(f);
+        global(f) <<= function(f);
 
         constant(x) <<= undef(x);
         constant(x) <<= null(x);

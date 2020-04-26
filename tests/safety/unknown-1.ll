@@ -11,8 +11,7 @@
 
 ; external functions can behave arbitrarily
 ; CHECK-DAG: @main::%result -> @main::aff(1)
-; CHECK-DAG: @main::%result -> @main::%a::aff(1)
-; CHECK-DAG: @main::%result -> @main::%b::aff(1)
+; CHECK-DAG: @main::%result -> @0::aff(1)
 
 declare i32* @0()
 

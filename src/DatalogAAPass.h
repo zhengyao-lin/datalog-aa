@@ -16,22 +16,24 @@ public:
     };
 
 private:
-    static std::map<Algorithm, StandardDatalog::Program> analysis_map;
+    static std::map<Algorithm, StandardDatalog::Program> analysisMap;
 
     const llvm::Module *unit;
-    FactGenerator fact_generator;
+    FactGenerator factGenerator;
     std::unique_ptr<StandardDatalog::Backend> backend; // TODO: support different backends?
 
     template<typename T>
     using ConcreteBinaryRelation = std::set<std::pair<T, T>>;
 
-    ConcreteBinaryRelation<unsigned int> points_to_relation;
-    ConcreteBinaryRelation<unsigned int> alias_relation;
+    ConcreteBinaryRelation<unsigned int> pointsToRelation;
+    ConcreteBinaryRelation<unsigned int> aliasRelation;
+    std::map<unsigned int, std::set<unsigned int>> pointsToSet;
 
 public:
     DatalogAAResult(const llvm::Module &unit);
 
     llvm::AliasResult alias(const llvm::MemoryLocation &location_a, const llvm::MemoryLocation &location_b);
+    bool pointsToConstantMemory(const llvm::MemoryLocation &loc, bool or_local);
 
 private:
     ConcreteBinaryRelation<unsigned int>

@@ -55,7 +55,7 @@ void FactGenerator::initObjectIDForFunction(const Function &function) {
 
 void FactGenerator::initObjectIDForBasicBlock(const BasicBlock &block) {
     // TODO: should we consider basic block objects
-    addValue(&block);
+    // addValue(&block);
 
     for (const Instruction &instr: block) {
         addValue(&instr, getAffiliatedObjectCountForInstruction(instr));
@@ -140,6 +140,8 @@ void FactGenerator::generateFactsForModule(StandardDatalog::Program &program, co
 }
 
 void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, const Function &function) {
+    generateFactsForValue(program, function);
+
     unsigned int function_id = getObjectIDOfValue(&function);
     unsigned int function_mem_id = getAffiliatedObjectID(function_id, 1);
 
@@ -170,14 +172,16 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
 }
 
 void FactGenerator::generateFactsForBasicBlock(StandardDatalog::Program &program, const BasicBlock &block) {
-    unsigned int block_id = getObjectIDOfValue(&block);
-    unsigned int function_id = getObjectIDOfValue(block.getParent());
+    // TODO: consider addresses of basic blocks
+    // unsigned int block_id = getObjectIDOfValue(&block);
+    // unsigned int function_id = getObjectIDOfValue(block.getParent());
 
-    program.addFormula(rel_block(block_id));
-    program.addFormula(rel_immutable(block_id));
-    program.addFormula(rel_hasBlock(function_id, block_id));
+    // program.addFormula(rel_block(block_id));
+    // program.addFormula(rel_immutable(block_id));
+    // program.addFormula(rel_hasBlock(function_id, block_id));
 
     for (const Instruction &instr: block) {
+        generateFactsForValue(program, instr);
         generateFactsForInstruction(program, instr);
     }
 }
@@ -265,9 +269,12 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
         }
 
         case Instruction::Ret: {
-            const Value *value = user.getOperand(0);
-            unsigned int value_id = getObjectIDOfValue(value);
-            program.addFormula(rel_instrRet(instr_id, value_id));
+            // ignore ret void
+            if (user.getNumOperands() > 0) {
+                const Value *value = user.getOperand(0);
+                unsigned int value_id = getObjectIDOfValue(value);
+                program.addFormula(rel_instrRet(instr_id, value_id));
+            }
             break;
         }
 
@@ -311,6 +318,10 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             assert(call && "not a call instruction");
 
             const Function *function = call->getCalledFunction();
+
+            if (!function) {
+                goto UNKNOWN_INSTR;
+            }
             
             unsigned int call_id = getObjectIDOfValue(call);
             unsigned int function_id = getObjectIDOfValue(function);
@@ -351,10 +362,34 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
             }
 
             break;
-        };
+        }
+
+        // whitelist
+        case Instruction::ICmp: break;
+        case Instruction::FCmp: break;
+
+        // irrelavent case instructions
+        case Instruction::Trunc: break;
+        case Instruction::ZExt: break;
+        case Instruction::SExt: break;
+        case Instruction::FPToUI: break;
+        case Instruction::UIToFP: break;
+        case Instruction::SIToFP: break;
+        case Instruction::FPTrunc: break;
+        case Instruction::FPExt: break;
+
+        case Instruction::Unreachable: break;
 
         default:
         UNKNOWN_INSTR:
+            // ignore arithemtic/logical operators
+            if (const Instruction *instr = dyn_cast<Instruction>(&user)) {
+                if (instr->isBinaryOp() ||
+                    instr->isUnaryOp()) {
+                    break;
+                }
+            }
+
             program.addFormula(rel_instrUnknown(instr_id));
             dbgs() << "unsupported instruction ";
             user.print(dbgs());
@@ -363,6 +398,8 @@ void FactGenerator::generateFactsForInstruction(StandardDatalog::Program &progra
 }
 
 void FactGenerator::generateFactsForGlobalVariable(StandardDatalog::Program &program, const GlobalVariable &global) {
+    generateFactsForValue(program, global);
+
     unsigned int global_id = getObjectIDOfValue(&global);
     unsigned int global_mem_id = getAffiliatedObjectID(global_id, 1);
 
@@ -408,6 +445,8 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
     }
 
     initializedConstants.insert(&constant);
+
+    generateFactsForValue(program, constant);
 
     unsigned int constant_id = getObjectIDOfValue(&constant);
 
@@ -457,6 +496,23 @@ void FactGenerator::generateFactsForConstant(StandardDatalog::Program &program, 
 }
 
 /**
+ * The most general fact generator for values
+ */
+void FactGenerator::generateFactsForValue(StandardDatalog::Program &program, const llvm::Value &value) {
+    unsigned int val_id = getObjectIDOfValue(&value);
+    Type *type = value.getType();
+
+    // whitelist of non-pointer types
+    if (type->isIntegerTy() ||
+        type->isFloatingPointTy()) {
+        // dbgs() << "nonpointer: ";
+        // value.print(dbgs());
+        // dbgs() << "\n";
+        program.addFormula(rel_nonpointer(val_id));
+    }
+}
+
+/**
  * To add support for a new intrinsics, add a new class here inheriting IntrinsicCall
  */
 
@@ -464,8 +520,17 @@ struct MallocIntrinsicCall: IntrinsicCall {
     virtual MatchResult match(const CallInst *call) override {
         const Function *function = call->getCalledFunction();
     
-        if (function->getName() == "malloc" &&
-            function->arg_size() == 1 &&
+        if (!function) {
+            return { false };
+        }
+
+        bool name_match =
+            function->getName() == "malloc" ||
+            function->getName() == "calloc" ||
+            function->getName() == "realloc" ||
+            function->getName() == "fopen";
+
+        if (name_match &&
             function->arg_begin()->getType()->isIntegerTy() &&
             function->getReturnType()->isPointerTy()) {
             return { true, 1 };
@@ -489,8 +554,17 @@ struct MemcpyIntrinsicCall: IntrinsicCall {
     virtual MatchResult match(const CallInst *call) override {
         const Function *function = call->getCalledFunction();
     
-        if ((function->getName().startswith("llvm.memcpy.") ||
-             function->getName().startswith("llvm.memmove.")) &&
+        if (!function) {
+            return { false };
+        }
+
+        bool name_match =
+            function->getName().startswith("llvm.memcpy.") ||
+            function->getName().startswith("llvm.memmove.") ||
+            function->getName() == "strncpy" ||
+            function->getName() == "strcpy";
+
+        if (name_match &&
             function->arg_size() >= 2) {
             return { true, 0 };
         }
@@ -512,7 +586,39 @@ struct MemcpyIntrinsicCall: IntrinsicCall {
     }
 };
 
+/**
+ * A collections of calls that we assume to have no side effect
+ * to our program
+ */
+struct ConstantIntrinsicCall: IntrinsicCall {
+    const std::set<std::string> callList = {
+        "free",
+        "printf", "fprintf",
+        "__isoc99_scanf", "scanf",
+        "fflush", "feof", "_IO_getc",
+        "tolower", "fclose", "exit"
+    };
+
+    virtual MatchResult match(const CallInst *call) override {
+        const Function *function = call->getCalledFunction();
+    
+        if (function &&
+            callList.find(function->getName()) != callList.end()) {
+            return { true, 0 };
+        }
+
+        return { false };
+    }
+
+    virtual void generate(FactGenerator *fact_generator,
+                          StandardDatalog::Program &program,
+                          const llvm::CallInst *call) override {
+        // generate nothing
+    }
+};
+
 std::vector<IntrinsicCall *> FactGenerator::intrinsicList = {
     new MallocIntrinsicCall(),
-    new MemcpyIntrinsicCall()
+    new MemcpyIntrinsicCall(),
+    new ConstantIntrinsicCall(),
 };

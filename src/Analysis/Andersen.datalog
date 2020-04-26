@@ -7,9 +7,9 @@
 
     // main axioms
     pointsTo(ANY_OBJECT, x) <<= object(x) & !nonaddressable(x);
-    pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y); // p = *q
-    pointsTo(y, x) <<= store(q, p) & pointsTo(q, x) & pointsTo(p, y); // *p = q
-    pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x) & !nonpointer(p); // p = q
+    pointsTo(p, y) <<= load(p, q) & pointsTo(q, x) & pointsTo(x, y) & !nonpointer(p) & !nonaddressable(y); // p = *q
+    pointsTo(y, x) <<= store(q, p) & pointsTo(q, x) & pointsTo(p, y) & !nonpointer(y) & !nonaddressable(x); // *p = q
+    pointsTo(p, x) <<= copy(p, q) & pointsTo(q, x) & !nonpointer(p) & !nonpointer(q) & !nonaddressable(x); // p = q
     // NOTE ^: we only care about objects with pointer types
     // OR aggregated objects containing a pointer object
 
@@ -26,8 +26,8 @@
     // if a global has no initializer,
     // it could point to anything
     copy(x, ANY_OBJECT) <<= global(p)
-                        & pointsTo(p, x)
-                        & hasNoInitializer(p);
+                          & pointsTo(p, x)
+                          & hasNoInitializer(p);
 
     // constants
     copy(c, d) <<= hasConstantField(c, d);
@@ -51,18 +51,52 @@
 
     // call instruction return value
     copy(i, x) <<= instrCall(i, f)
-                & hasInstr(f, j)
-                & instrRet(j, x);
+                 & hasInstr(f, j)
+                 & instrRet(j, x);
     
-    // unknown instructions can do anything to its operands
-    copy(i, ANY_OBJECT) <<= instrUnknown(i);
+    // a conservative estimate of unknown instructions
 
-    copy(y, ANY_OBJECT) <<= instrUnknown(i)
-                        & hasOperand(i, x)
-                        & pointsToIndirectly(x, y)
-                        & !immutable(y);
+    // copy between operands
+    copy(p, q) <<= instrUnknown(i)
+                 & hasOperand(i, x)
+                 & hasOperand(i, y)
+                 & pointsToIndirectly(x, p)
+                 & hasAccessTo(y, q) // including y itself
+                 & !immutable(p);
+    
+    // copy from globals to operands
+    copy(p, q) <<= instrUnknown(i)
+                 & hasOperand(i, x)
+                 & global(y)
+                 & pointsToIndirectly(x, p)
+                 & hasAccessTo(y, q)
+                 & !immutable(p);
 
-    // TODO: unknown instruction can potentially change all (non-private) globals
+    // copy from operands to globals
+    copy(p, q) <<= instrUnknown(i)
+                 & global(x)
+                 & hasOperand(i, y)
+                 & pointsToIndirectly(x, p)
+                 & hasAccessTo(y, q)
+                 & !immutable(p);
+
+    // return value could come from any of the operands
+    copy(i, p) <<= instrUnknown(i)
+                 & hasOperand(i, x)
+                 & hasAccessTo(x, p);
+
+    // return value could also come from any globals
+    copy(i, p) <<= instrUnknown(i)
+                 & global(x)
+                 & hasAccessTo(x, p);
+
+    // unknown instruction can potentially change all globals
+    copy(p, q) <<= instrUnknown(i)
+                 & global(x)
+                 & global(y)
+                 & pointsToIndirectly(x, p)
+                 & hasAccessTo(y, q)
+                 & !immutable(p);
 
     // intrinsics
     pointsTo(p, x) <<= intrinsicMalloc(p, x);
