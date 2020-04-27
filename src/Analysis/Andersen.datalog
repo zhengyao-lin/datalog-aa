@@ -98,10 +98,29 @@
                  & hasAccessTo(y, q)
                  & !immutable(p);
 
+    // non-private funtion argument can point to any global variable
+    // copy(x, p) <<= function(f)
+    //              & hasArgument(f, x)
+    //              & global(y)
+    //              & hasAccessTo(y, p);
+
     // intrinsics
     pointsTo(p, x) <<= intrinsicMalloc(p, x);
     copy(x, y) <<= intrinsicMemcpy(i, p, q)
                  & pointsTo(p, x)
                  & pointsTo(q, y);
+
+    // free arguments may alias each other
+    // and points to global variables
+    pointsTo(p, x) <<= hasFreeArgument(f, p, x);
+
+    copy(p, q) <<= hasFreeArgument(f, p, x)
+                 & hasFreeArgument(f, q, y);
+
+    copy(p, q) <<= hasFreeArgument(f, p, x)
+                 & global(y)
+                 & hasAccessTo(y, q);
+
+    copy(q, p) <<= hasFreeArgument(f, p, q);
 
 #endif // #ifdef IN_DSL

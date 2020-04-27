@@ -45,7 +45,11 @@ void FactGenerator::initObjectIDForFunction(const Function &function) {
     addValue(&function, 1);
 
     for (const Argument &arg: function.args()) {
-        addValue(&arg);
+        if (isFreeArgument(&arg)) {
+            addValue(&arg, 1);
+        } else {
+            addValue(&arg);
+        }
     }
 
     for (const BasicBlock &block: function) {
@@ -113,6 +117,15 @@ bool FactGenerator::containPointer(const Type *type) {
 }
 
 /**
+ * Check if this argument is not used anywhere in the program
+ * if so we also need an affliated object to represent its value
+ */
+bool FactGenerator::isFreeArgument(const Argument *arg) {
+    const Function *function = arg->getParent();
+    return function->user_empty();
+}
+
+/**
  * For the first stage, we will limit ourselves to
  * modules with the following requirements:
  *   - (non-external) functions
@@ -157,13 +170,19 @@ void FactGenerator::generateFactsForFunction(StandardDatalog::Program &program, 
     // but the function object itself is addressable (in particular by the pointer)
     program.addFormula(rel_nonaddressable(function_id));
 
-    for (const Value &arg: function.args()) {
+    for (const Argument &arg: function.args()) {
+        generateFactsForValue(program, arg);
+
         unsigned int arg_id = getObjectIDOfValue(&arg);
 
         // TODO: check if this is true (variadic argument?)
         program.addFormula(rel_nonaddressable(arg_id));
-
         program.addFormula(rel_immutable(arg_id));
+
+        if (isFreeArgument(&arg)) {
+            unsigned int arg_mem_id = getAffiliatedObjectID(arg_id, 1);
+            program.addFormula(rel_hasFreeArgument(function_id, arg_id, arg_mem_id));
+        }
     }
 
     for (const BasicBlock &block: function) {

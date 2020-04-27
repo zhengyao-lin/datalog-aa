@@ -114,6 +114,11 @@ AliasResult DatalogAAResult::alias(const MemoryLocation &location_a, const Memor
     );
 
     if (aliasRelation.find(pair) != aliasRelation.end()) {
+        if (pointsToSet[val_a_id].size() == 1 &&
+            pointsToSet[val_b_id].size() == 1) {
+            return MustAlias;
+        }
+
         return MayAlias;
     } else {
         return NoAlias;

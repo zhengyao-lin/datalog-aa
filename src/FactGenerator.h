@@ -154,6 +154,7 @@ private:
     }
 
     bool containPointer(const llvm::Type *type);
+    bool isFreeArgument(const llvm::Argument *arg);
     
     void generateFactsForValue(StandardDatalog::Program &program, const llvm::Value &value);
 

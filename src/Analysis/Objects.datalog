@@ -50,6 +50,7 @@
     rel(nonaddressable, Object);
 
     /* element relations */
+    rel(hasFreeArgument, Object /* function */, Object /* argument */, Object /* argument mem */);
     rel(hasAllocatedMemory, Object /* function */, Object /* mem */);
     rel(hasArgument, Object /* function */, Object /* argument */);
     rel(hasBlock, Object /* function */, Object);
